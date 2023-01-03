@@ -1,0 +1,50 @@
+#!/bin/bash
+# fitdb
+
+# Stop on errors
+set -e
+
+# Sanity check command line options
+usage() {
+  echo "Usage: $0 (create|destroy|reset|dump)"
+}
+
+if [ $# -ne 1 ]; then
+  usage
+  exit 1
+fi
+
+# Parse argument.  $1 is the first argument
+case $1 in
+  "create")
+    if [[ -e var/fit.db ]]; then
+      echo "Error: database already exists"
+    else
+      sqlite3 var/fit.db < sql/schema.sql
+      echo "+ sqlite3 var/fit.db < sql/schema.sql"
+    fi
+    ;;
+
+  "destroy")
+    rm -rf var/fit.db
+    echo "+ rm -rf var/fit.db"
+    ;;
+
+  "reset")
+    rm -rf var/fit.db
+    echo "+ rm -rf var/fit.db var/uploads"
+    sqlite3 var/fit.db < sql/schema.sql
+    echo "+ sqlite3 var/fit.db < sql/schema.sql"
+    ;;
+
+  "dump")
+    echo '+ sqlite3 var/fit.db "SELECT * FROM event"'
+    sqlite3 var/fit.db "SELECT * FROM event"
+    echo '+ sqlite3 var/fit.db "SELECT * FROM instance"'
+    sqlite3 var/fit.db "SELECT * FROM instance"
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
