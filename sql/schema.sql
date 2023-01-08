@@ -1,21 +1,21 @@
-CREATE TABLE event(
+CREATE TABLE events(
     name VARCHAR(256) NOT NULL,
     eventgroup VARCHAR(256) DEFAULT "OTHER" NOT NULL,
     created TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     PRIMARY KEY(name)
 );
 
-CREATE TABLE instance(
+CREATE TABLE instances(
     instanceid INTEGER PRIMARY KEY AUTOINCREMENT,
-    eventype VARCHAR(256) NOT NULL,
+    name VARCHAR(256) NOT NULL,
+    eventtype VARCHAR(256) NOT NULL,
     isrecurring INTEGER DEFAULT 0 NOT NULL,
     isfinished INTEGER DEFAULT 0 NOT NULL,
     percentage REAL DEFAULT 0.0 NOT NULL,
     timesfinished INTEGER DEFAULT 0 NOT NULL,
-    timelimit INTEGER,
-    lastfinished TIMESTAMP NOT NULL,
+    daylimit INTEGER DEFAULT 0 NOT NULL,
     created TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    FOREIGN KEY(eventype) REFERENCES event(name)
+    FOREIGN KEY(eventtype) REFERENCES event(name)
         ON DELETE CASCADE
         ON UPDATE CASCADE
 );

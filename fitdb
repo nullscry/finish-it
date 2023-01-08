@@ -22,6 +22,8 @@ case $1 in
     else
       sqlite3 var/fit.db < sql/schema.sql
       echo "+ sqlite3 var/fit.db < sql/schema.sql"
+      sqlite3 var/fit.db < sql/data.sql
+      echo "+ sqlite3 var/fit.db < sql/data.sql"
     fi
     ;;
 
@@ -35,13 +37,15 @@ case $1 in
     echo "+ rm -rf var/fit.db var/uploads"
     sqlite3 var/fit.db < sql/schema.sql
     echo "+ sqlite3 var/fit.db < sql/schema.sql"
+    sqlite3 var/fit.db < sql/data.sql
+    echo "+ sqlite3 var/fit.db < sql/data.sql"
     ;;
 
   "dump")
     echo '+ sqlite3 var/fit.db "SELECT * FROM event"'
-    sqlite3 var/fit.db "SELECT * FROM event"
+    sqlite3 var/fit.db "SELECT * FROM events"
     echo '+ sqlite3 var/fit.db "SELECT * FROM instance"'
-    sqlite3 var/fit.db "SELECT * FROM instance"
+    sqlite3 var/fit.db "SELECT * FROM instances"
     ;;
   *)
     usage

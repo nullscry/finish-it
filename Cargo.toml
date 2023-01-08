@@ -6,5 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-colored = "2.0.0"
-rusqlite = { version = "0.28.0", features = ["bundled"] }
+# colored = "2.0.0"
+tui = { version = "0.19.0", default-features = false, features = ['crossterm', 'serde'] }
+crossterm = { version = "0.25", features = [ "serde" ] }
+rusqlite = { version = "0.28.0", features = ["bundled", "chrono"] }
+serde = {version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+rand = { version = "0.7.3", default-features = false, features = ["std"] }
+thiserror = "1.0"

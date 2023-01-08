@@ -1,3 +1,4 @@
 /target
 /var/fit.db
 notes
+sql/data.sql
