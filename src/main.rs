@@ -3,9 +3,7 @@ use crossterm::{
     event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
-use rand::{distributions::Alphanumeric, prelude::*};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::io;
 use std::path;
 use std::sync::mpsc;
@@ -23,7 +21,6 @@ use tui::{
     Terminal,
 };
 
-use rusqlite::NO_PARAMS;
 use rusqlite::{Connection, Result};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -107,10 +104,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            if last_tick.elapsed() >= tick_rate {
-                if let Ok(_) = tx.send(Event::Tick) {
-                    last_tick = Instant::now();
-                }
+            if last_tick.elapsed() >= tick_rate && tx.send(Event::Tick).is_ok() {
+                last_tick = Instant::now();
             }
         }
     });
