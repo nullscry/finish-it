@@ -117,8 +117,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let menu_titles = vec!["Home", "Events", "Add", "Delete", "Quit"];
     let mut active_menu_item = MenuItem::Home;
-    let mut instance_list_state = ListState::default();
-    instance_list_state.select(Some(0));
+    let mut event_list_state = ListState::default();
+    event_list_state.select(Some(0));
 
     loop {
         terminal.draw(|rect| {
@@ -180,8 +180,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             [Constraint::Percentage(20), Constraint::Percentage(80)].as_ref(),
                         )
                         .split(chunks[1]);
-                    let (left, right) = render_events(&instance_list_state, &conn);
-                    rect.render_stateful_widget(left, event_chunks[0], &mut instance_list_state);
+                    let (left, right) = render_events(&event_list_state, &conn);
+                    rect.render_stateful_widget(left, event_chunks[0], &mut event_list_state);
                     rect.render_widget(right, event_chunks[1]);
                 }
             }
@@ -201,25 +201,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 //     add_random_pet_to_db().expect("can add new random EventItem");
                 // }
                 // KeyCode::Char('d') => {
-                //     remove_pet_at_index(&mut instance_list_state).expect("can remove EventItem");
+                //     remove_pet_at_index(&mut event_list_state).expect("can remove EventItem");
                 // }
                 KeyCode::Down => {
-                    if let Some(selected) = instance_list_state.selected() {
-                        let amount_events = read_db(&conn).expect("can fetch EventItem list").len();
+                    if let Some(selected) = event_list_state.selected() {
+                        let amount_events = read_events_from_db(&conn)
+                            .expect("can fetch EventItem list")
+                            .len();
                         if selected >= amount_events - 1 {
-                            instance_list_state.select(Some(0));
+                            event_list_state.select(Some(0));
                         } else {
-                            instance_list_state.select(Some(selected + 1));
+                            event_list_state.select(Some(selected + 1));
                         }
                     }
                 }
                 KeyCode::Up => {
-                    if let Some(selected) = instance_list_state.selected() {
-                        let amount_events = read_db(&conn).expect("can fetch EventItem list").len();
+                    if let Some(selected) = event_list_state.selected() {
+                        let amount_events = read_events_from_db(&conn)
+                            .expect("can fetch EventItem list")
+                            .len();
                         if selected > 0 {
-                            instance_list_state.select(Some(selected - 1));
+                            event_list_state.select(Some(selected - 1));
                         } else {
-                            instance_list_state.select(Some(amount_events - 1));
+                            event_list_state.select(Some(amount_events - 1));
                         }
                     }
                 }
@@ -257,14 +261,15 @@ fn render_home<'a>() -> Paragraph<'a> {
     home
 }
 
-fn render_events<'a>(instance_list_state: &ListState, conn: &Connection) -> (List<'a>, Table<'a>) {
+fn render_events<'a>(event_list_state: &ListState, conn: &Connection) -> (List<'a>, Table<'a>) {
     let events = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
         .title("events")
         .border_type(BorderType::Plain);
 
-    let event_list = read_db(conn).expect("can fetch EventItem list");
+    let event_list = read_events_from_db(conn).expect("can fetch EventItem list");
+
     let items: Vec<_> = event_list
         .iter()
         .map(|instance| {
@@ -275,9 +280,9 @@ fn render_events<'a>(instance_list_state: &ListState, conn: &Connection) -> (Lis
         })
         .collect();
 
-    let selected_instance = event_list
+    let selected_event = event_list
         .get(
-            instance_list_state
+            event_list_state
                 .selected()
                 .expect("there is always a selected EventItem"),
         )
@@ -291,80 +296,114 @@ fn render_events<'a>(instance_list_state: &ListState, conn: &Connection) -> (Lis
             .add_modifier(Modifier::BOLD),
     );
 
-    let instance_detail = Table::new(vec![Row::new(vec![
-        Cell::from(Span::raw(selected_instance.instanceid.to_string())),
-        Cell::from(Span::raw(selected_instance.name.to_string())),
-        Cell::from(Span::raw(selected_instance.eventtype.to_string())),
-        Cell::from(Span::raw(selected_instance.isrecurring.to_string())),
-        Cell::from(Span::raw(selected_instance.isfinished.to_string())),
-        Cell::from(Span::raw(selected_instance.percentage.to_string())),
-        Cell::from(Span::raw(selected_instance.timesfinished.to_string())),
-        Cell::from(Span::raw(selected_instance.daylimit.to_string())),
-        // Cell::from(Span::raw(selected_instance.lastfinished.to_string())),
-        Cell::from(Span::raw(selected_instance.created.to_string())),
-    ])])
-    .header(Row::new(vec![
-        Cell::from(Span::styled(
-            "ID",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Name",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Category",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Recur",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Completed",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Completed %",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Completed #",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Day Limit",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-        Cell::from(Span::styled(
-            "Created At",
-            Style::default().add_modifier(Modifier::BOLD),
-        )),
-    ]))
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .style(Style::default().fg(Color::White))
-            .title("Detail")
-            .border_type(BorderType::Plain),
-    )
-    .widths(&[
-        Constraint::Percentage(5),
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
-        Constraint::Percentage(5),
-        Constraint::Percentage(5),
-        Constraint::Percentage(5),
-        Constraint::Percentage(5),
-        Constraint::Percentage(5),
-        Constraint::Percentage(20),
-    ]);
+    let instance_list =
+        read_instances_from_db(conn, &selected_event.name).expect("can fetch EventItem list");
+
+    let mut rows: Vec<Row<'a>> = Vec::new();
+    for instance in instance_list {
+        rows.push(Row::new(vec![
+            Cell::from(Span::raw(instance.instanceid.to_string())),
+            Cell::from(Span::raw(instance.name.to_string())),
+            Cell::from(Span::raw(instance.eventtype.to_string())),
+            Cell::from(Span::raw(instance.isrecurring.to_string())),
+            Cell::from(Span::raw(instance.isfinished.to_string())),
+            Cell::from(Span::raw(instance.percentage.to_string())),
+            Cell::from(Span::raw(instance.timesfinished.to_string())),
+            Cell::from(Span::raw(instance.daylimit.to_string())),
+            Cell::from(Span::raw(instance.created.to_string())),
+        ]));
+    }
+
+    let instance_detail = Table::new(rows)
+        .header(Row::new(vec![
+            Cell::from(Span::styled(
+                "ID",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Name",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Category",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Recur",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Completed",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Completed %",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Completed #",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Day Limit",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+            Cell::from(Span::styled(
+                "Created At",
+                Style::default().add_modifier(Modifier::BOLD),
+            )),
+        ]))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default().fg(Color::White))
+                .title("Detail")
+                .border_type(BorderType::Plain),
+        )
+        .widths(&[
+            Constraint::Percentage(5),
+            Constraint::Percentage(20),
+            Constraint::Percentage(20),
+            Constraint::Percentage(5),
+            Constraint::Percentage(5),
+            Constraint::Percentage(5),
+            Constraint::Percentage(5),
+            Constraint::Percentage(5),
+            Constraint::Percentage(20),
+        ]);
 
     (list, instance_detail)
 }
 
-fn read_db(conn: &Connection) -> Result<Vec<InstanceItem>, rusqlite::Error> {
-    let mut stmt = conn.prepare("SELECT * FROM instances")?;
+fn read_events_from_db(conn: &Connection) -> Result<Vec<EventItem>, rusqlite::Error> {
+    let mut stmt = conn.prepare("SELECT * FROM events")?;
+    let event_iter = stmt.query_map([], |row| {
+        Ok(EventItem {
+            name: row.get(0)?,
+            eventgroup: row.get(1)?,
+            created: row.get(2)?,
+        })
+    })?;
+
+    let mut events = Vec::new();
+    for event in event_iter {
+        events.push(event?);
+    }
+
+    Ok(events)
+}
+
+fn read_instances_from_db(
+    conn: &Connection,
+    event_name: &str,
+) -> Result<Vec<InstanceItem>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        format!(
+            "SELECT * FROM instances WHERE eventtype = \"{}\"",
+            event_name
+        )
+        .as_str(),
+    )?;
     let instance_iter = stmt.query_map([], |row| {
         Ok(InstanceItem {
             instanceid: row.get(0)?,
@@ -410,17 +449,17 @@ fn read_db(conn: &Connection) -> Result<Vec<InstanceItem>, rusqlite::Error> {
 //     Ok(parsed)
 // }
 
-// fn remove_pet_at_index(instance_list_state: &mut ListState) -> Result<(), Error> {
-//     if let Some(selected) = instance_list_state.selected() {
+// fn remove_pet_at_index(event_list_state: &mut ListState) -> Result<(), Error> {
+//     if let Some(selected) = event_list_state.selected() {
 //         let db_content = fs::read_to_string(DB_PATH)?;
 //         let mut parsed: Vec<EventItem> = serde_json::from_str(&db_content)?;
 //         parsed.remove(selected);
 //         fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
 //         let amount_events = read_db().expect("can fetch EventItem list").len();
 //         if selected > 0 {
-//             instance_list_state.select(Some(selected - 1));
+//             event_list_state.select(Some(selected - 1));
 //         } else {
-//             instance_list_state.select(Some(0));
+//             event_list_state.select(Some(0));
 //         }
 //     }
 //     Ok(())
