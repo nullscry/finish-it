@@ -16,7 +16,8 @@ use tui::{
     style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{
-        Block, BorderType, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, Tabs,
+        Block, BorderType, Borders, Cell, List, ListItem, ListState, Paragraph, Row,
+        StatefulWidget, Table, TableState, Tabs,
     },
     Terminal,
 };
@@ -61,6 +62,11 @@ enum Event<I> {
 enum MenuItem {
     Home,
     Instances,
+}
+
+enum ActiveBlock {
+    EventBlock,
+    InstanceBlock,
 }
 
 impl From<MenuItem> for usize {
@@ -119,6 +125,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut active_menu_item = MenuItem::Home;
     let mut event_list_state = ListState::default();
     event_list_state.select(Some(0));
+
+    let mut instance_list_state = TableState::default();
+    instance_list_state.select(Some(0));
+
+    let mut active_block = ActiveBlock::EventBlock;
+    let mut instance_count = 0;
+
+    let mut events = read_events_from_db(&conn).expect("can fetch EventItem list");
 
     loop {
         terminal.draw(|rect| {
@@ -182,7 +196,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .split(chunks[1]);
                     let (left, right) = render_events(&event_list_state, &conn);
                     rect.render_stateful_widget(left, event_chunks[0], &mut event_list_state);
-                    rect.render_widget(right, event_chunks[1]);
+                    rect.render_stateful_widget(right, event_chunks[1], &mut instance_list_state);
                 }
             }
             rect.render_widget(copyright, chunks[2]);
@@ -203,29 +217,86 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // KeyCode::Char('d') => {
                 //     remove_pet_at_index(&mut event_list_state).expect("can remove EventItem");
                 // }
-                KeyCode::Down => {
-                    if let Some(selected) = event_list_state.selected() {
-                        let amount_events = read_events_from_db(&conn)
-                            .expect("can fetch EventItem list")
-                            .len();
-                        if selected >= amount_events - 1 {
-                            event_list_state.select(Some(0));
-                        } else {
-                            event_list_state.select(Some(selected + 1));
+                KeyCode::Down => match active_block {
+                    ActiveBlock::EventBlock => {
+                        if let Some(selected) = event_list_state.selected() {
+                            let amount_events = read_events_from_db(&conn)
+                                .expect("can fetch EventItem list")
+                                .len();
+                            if selected >= amount_events - 1 {
+                                event_list_state.select(Some(0));
+                            } else {
+                                event_list_state.select(Some(selected + 1));
+                            }
                         }
                     }
+                    ActiveBlock::InstanceBlock => {
+                        if let Some(selected) = instance_list_state.selected() {
+                            if selected >= instance_count - 1 {
+                                instance_list_state.select(Some(0));
+                            } else {
+                                instance_list_state.select(Some(selected + 1));
+                            }
+                        }
+                    }
+                },
+                KeyCode::Up => match active_block {
+                    ActiveBlock::EventBlock => {
+                        if let Some(selected) = event_list_state.selected() {
+                            let amount_events = read_events_from_db(&conn)
+                                .expect("can fetch EventItem list")
+                                .len();
+                            if selected > 0 {
+                                event_list_state.select(Some(selected - 1));
+                            } else {
+                                event_list_state.select(Some(amount_events - 1));
+                            }
+                        }
+                    }
+                    ActiveBlock::InstanceBlock => {
+                        if let Some(selected) = instance_list_state.selected() {
+                            if selected > 0 {
+                                instance_list_state.select(Some(selected - 1));
+                            } else {
+                                instance_list_state.select(Some(instance_count - 1));
+                            }
+                        }
+                    }
+                },
+                KeyCode::Right => {
+                    active_block = ActiveBlock::InstanceBlock;
+                    instance_list_state.select(Some(0));
+                    instance_count = read_instances_count_from_db(
+                        &conn,
+                        &events
+                            .get(event_list_state.selected().unwrap())
+                            .expect("Event list state error")
+                            .name,
+                    )
+                    .expect("Error in counting instances from DB of selected event");
+                    // if let Some(selected) = event_list_state.selected() {
+                    //     let amount_events = read_events_from_db(&conn)
+                    //         .expect("can fetch EventItem list")
+                    //         .len();
+                    //     if selected >= amount_events - 1 {
+                    //         event_list_state.select(Some(0));
+                    //     } else {
+                    //         event_list_state.select(Some(selected + 1));
+                    //     }
+                    // }
                 }
-                KeyCode::Up => {
-                    if let Some(selected) = event_list_state.selected() {
-                        let amount_events = read_events_from_db(&conn)
-                            .expect("can fetch EventItem list")
-                            .len();
-                        if selected > 0 {
-                            event_list_state.select(Some(selected - 1));
-                        } else {
-                            event_list_state.select(Some(amount_events - 1));
-                        }
-                    }
+                KeyCode::Left => {
+                    active_block = ActiveBlock::EventBlock;
+                    // if let Some(selected) = event_list_state.selected() {
+                    //     let amount_events = read_events_from_db(&conn)
+                    //         .expect("can fetch EventItem list")
+                    //         .len();
+                    //     if selected >= amount_events - 1 {
+                    //         event_list_state.select(Some(0));
+                    //     } else {
+                    //         event_list_state.select(Some(selected + 1));
+                    //     }
+                    // }
                 }
                 _ => {}
             },
@@ -370,7 +441,22 @@ fn render_events<'a>(event_list_state: &ListState, conn: &Connection) -> (List<'
             Constraint::Percentage(5),
             Constraint::Percentage(5),
             Constraint::Percentage(20),
-        ]);
+        ])
+        .highlight_style(
+            Style::default()
+                .bg(Color::LightMagenta)
+                .fg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+        );
+
+    // let selected_instance = instance_list
+    //     .get(
+    //         instance_list_state
+    //             .selected()
+    //             .expect("there is always a selected EventItem"),
+    //     )
+    //     .expect("exists")
+    //     .clone();
 
     (list, instance_detail)
 }
@@ -391,6 +477,25 @@ fn read_events_from_db(conn: &Connection) -> Result<Vec<EventItem>, rusqlite::Er
     }
 
     Ok(events)
+}
+
+fn read_instances_count_from_db(
+    conn: &Connection,
+    selected_event: &str,
+) -> Result<usize, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        format!(
+            "SELECT COUNT(*) FROM instances WHERE eventtype = \"{}\"",
+            selected_event
+        )
+        .as_str(),
+    )?;
+    let mut rows = (stmt.query([]))?;
+
+    let row = rows.next().unwrap().expect("Invalid Event");
+    let instance_count: usize = row.get(0).expect("Invalid Event");
+
+    Ok(instance_count)
 }
 
 fn read_instances_from_db(
