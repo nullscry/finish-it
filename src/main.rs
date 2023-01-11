@@ -1,5 +1,6 @@
 use chrono::prelude::*;
 use crossterm::{
+    cursor::MoveLeft,
     event::{self, Event as CEvent, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
@@ -194,7 +195,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             [Constraint::Percentage(20), Constraint::Percentage(80)].as_ref(),
                         )
                         .split(chunks[1]);
-                    let (left, right) = render_events(&event_list_state, &conn);
+                    let (left, right) = render_events(&event_list_state, &conn, &active_block);
                     rect.render_stateful_widget(left, event_chunks[0], &mut event_list_state);
                     rect.render_stateful_widget(right, event_chunks[1], &mut instance_list_state);
                 }
@@ -332,7 +333,15 @@ fn render_home<'a>() -> Paragraph<'a> {
     home
 }
 
-fn render_events<'a>(event_list_state: &ListState, conn: &Connection) -> (List<'a>, Table<'a>) {
+fn render_events<'a>(
+    event_list_state: &ListState,
+    conn: &Connection,
+    active_block: &ActiveBlock,
+) -> (List<'a>, Table<'a>) {
+    let (list_highlight, table_highlight) = match active_block {
+        ActiveBlock::EventBlock => (Color::Red, Color::Yellow),
+        ActiveBlock::InstanceBlock => (Color::Yellow, Color::Red),
+    };
     let events = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
@@ -362,7 +371,7 @@ fn render_events<'a>(event_list_state: &ListState, conn: &Connection) -> (List<'
 
     let list = List::new(items).block(events).highlight_style(
         Style::default()
-            .bg(Color::Yellow)
+            .bg(list_highlight)
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
@@ -444,7 +453,7 @@ fn render_events<'a>(event_list_state: &ListState, conn: &Connection) -> (List<'
         ])
         .highlight_style(
             Style::default()
-                .bg(Color::LightMagenta)
+                .bg(table_highlight)
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         );
