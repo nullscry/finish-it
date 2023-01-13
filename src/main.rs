@@ -1,6 +1,5 @@
 use chrono::prelude::*;
 use crossterm::{
-    cursor::MoveLeft,
     event::{self, Event as CEvent, KeyCode, KeyEvent, KeyModifiers},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
@@ -17,8 +16,8 @@ use tui::{
     style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{
-        Block, BorderType, Borders, Cell, List, ListItem, ListState, Paragraph, Row,
-        StatefulWidget, Table, TableState, Tabs,
+        Block, BorderType, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table,
+        TableState, Tabs,
     },
     Terminal,
 };
@@ -138,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut active_block = ActiveBlock::EventBlock;
     let mut instance_count = 0;
 
-    let mut events = read_events_from_db(&conn).expect("can fetch EventItem list");
+    let events = read_events_from_db(&conn).expect("can fetch EventItem list");
 
     let mut textarea = [
         TextArea::default(),
@@ -168,13 +167,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut which: usize = 0;
 
-    for (mut ta, title) in textarea.iter_mut().zip(titles) {
-        initialize_title(&mut ta, title);
+    for (ta, title) in textarea.iter_mut().zip(titles) {
+        initialize_title(ta, title);
     }
 
     activate(&mut textarea[0]);
-    for mut ta in textarea.iter_mut().skip(1) {
-        inactivate(&mut ta);
+    for ta in textarea.iter_mut().skip(1) {
+        inactivate(ta);
     }
     loop {
         terminal.draw(|rect| {
