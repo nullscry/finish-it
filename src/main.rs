@@ -1,7 +1,7 @@
 use chrono::prelude::*;
 use crossterm::{
     cursor::MoveLeft,
-    event::{self, Event as CEvent, KeyCode},
+    event::{self, Event as CEvent, KeyCode, KeyEvent, KeyModifiers},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,9 @@ use tui::{
     },
     Terminal,
 };
+use tui_textarea::{Input, Key, TextArea};
+mod add;
+use add::{activate, inactivate, initialize_title};
 
 use rusqlite::{Connection, Result};
 
@@ -59,10 +62,11 @@ enum Event<I> {
     Tick,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum MenuItem {
     Home,
     Instances,
+    Add,
 }
 
 enum ActiveBlock {
@@ -75,6 +79,7 @@ impl From<MenuItem> for usize {
         match input {
             MenuItem::Home => 0,
             MenuItem::Instances => 1,
+            MenuItem::Add => 2,
         }
     }
 }
@@ -135,6 +140,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut events = read_events_from_db(&conn).expect("can fetch EventItem list");
 
+    let mut textarea = [
+        TextArea::default(),
+        TextArea::default(),
+        TextArea::default(),
+        TextArea::default(),
+        TextArea::default(),
+        TextArea::default(),
+        TextArea::default(),
+        TextArea::default(),
+    ];
+
+    let titles = [
+        "Event Name",
+        "Event Type",
+        "Instance Name",
+        "Is Recurring?",
+        "Is Finished?",
+        "% Completed",
+        "# Completed",
+        "Remaining Days",
+    ];
+
+    let layout_rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref());
+
+    let mut which: usize = 0;
+
+    for (mut ta, title) in textarea.iter_mut().zip(titles) {
+        initialize_title(&mut ta, title);
+    }
+
+    activate(&mut textarea[0]);
+    for mut ta in textarea.iter_mut().skip(1) {
+        inactivate(&mut ta);
+    }
     loop {
         terminal.draw(|rect| {
             let size = rect.size();
@@ -186,6 +227,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .divider(Span::raw("|"));
 
             rect.render_widget(tabs, chunks[0]);
+
             match active_menu_item {
                 MenuItem::Home => rect.render_widget(render_home(), chunks[1]),
                 MenuItem::Instances => {
@@ -199,109 +241,207 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     rect.render_stateful_widget(left, event_chunks[0], &mut event_list_state);
                     rect.render_stateful_widget(right, event_chunks[1], &mut instance_list_state);
                 }
+                MenuItem::Add => {
+                    let add_chunks = layout_rows.split(chunks[1]);
+                    let mut layout_cols = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints(
+                            [
+                                Constraint::Percentage(25),
+                                Constraint::Percentage(25),
+                                Constraint::Percentage(25),
+                                Constraint::Percentage(25),
+                            ]
+                            .as_ref(),
+                        )
+                        .split(add_chunks[0]);
+                    let mut layout_cols_lower = Layout::default()
+                        .direction(Direction::Horizontal)
+                        .constraints(
+                            [
+                                Constraint::Percentage(25),
+                                Constraint::Percentage(25),
+                                Constraint::Percentage(25),
+                                Constraint::Percentage(25),
+                            ]
+                            .as_ref(),
+                        )
+                        .split(add_chunks[1]);
+
+                    layout_cols.append(&mut layout_cols_lower);
+
+                    for (textarea, chunk) in textarea.iter().zip(layout_cols) {
+                        let widget = textarea.widget();
+                        rect.render_widget(widget, chunk);
+                    }
+                }
             }
             rect.render_widget(copyright, chunks[2]);
         })?;
 
-        match rx.recv()? {
-            Event::Input(event) => match event.code {
-                KeyCode::Char('q') => {
+        if active_menu_item == MenuItem::Add {
+            match crossterm::event::read()?.into() {
+                Input {
+                    key: Key::Char('h'),
+                    alt: true,
+                    ..
+                } => active_menu_item = MenuItem::Home,
+                Input {
+                    key: Key::Char('e'),
+                    alt: true,
+                    ..
+                } => active_menu_item = MenuItem::Instances,
+                Input {
+                    key: Key::Char('q'),
+                    alt: true,
+                    ..
+                } => {
                     disable_raw_mode()?;
                     terminal.show_cursor()?;
                     break;
                 }
-                KeyCode::Char('h') => active_menu_item = MenuItem::Home,
-                KeyCode::Char('e') => active_menu_item = MenuItem::Instances,
-                // KeyCode::Char('a') => {
-                //     add_random_pet_to_db().expect("can add new random EventItem");
-                // }
-                // KeyCode::Char('d') => {
-                //     remove_pet_at_index(&mut event_list_state).expect("can remove EventItem");
-                // }
-                KeyCode::Down => match active_block {
-                    ActiveBlock::EventBlock => {
-                        if let Some(selected) = event_list_state.selected() {
-                            let amount_events = read_events_from_db(&conn)
-                                .expect("can fetch EventItem list")
-                                .len();
-                            if selected >= amount_events - 1 {
-                                event_list_state.select(Some(0));
-                            } else {
-                                event_list_state.select(Some(selected + 1));
-                            }
-                        }
-                    }
-                    ActiveBlock::InstanceBlock => {
-                        if let Some(selected) = instance_list_state.selected() {
-                            if selected >= instance_count - 1 {
-                                instance_list_state.select(Some(0));
-                            } else {
-                                instance_list_state.select(Some(selected + 1));
-                            }
-                        }
-                    }
-                },
-                KeyCode::Up => match active_block {
-                    ActiveBlock::EventBlock => {
-                        if let Some(selected) = event_list_state.selected() {
-                            let amount_events = read_events_from_db(&conn)
-                                .expect("can fetch EventItem list")
-                                .len();
-                            if selected > 0 {
-                                event_list_state.select(Some(selected - 1));
-                            } else {
-                                event_list_state.select(Some(amount_events - 1));
-                            }
-                        }
-                    }
-                    ActiveBlock::InstanceBlock => {
-                        if let Some(selected) = instance_list_state.selected() {
-                            if selected > 0 {
-                                instance_list_state.select(Some(selected - 1));
-                            } else {
-                                instance_list_state.select(Some(instance_count - 1));
-                            }
-                        }
-                    }
-                },
-                KeyCode::Right => {
-                    active_block = ActiveBlock::InstanceBlock;
-                    instance_list_state.select(Some(0));
-                    instance_count = read_instances_count_from_db(
-                        &conn,
-                        &events
-                            .get(event_list_state.selected().unwrap())
-                            .expect("Event list state error")
-                            .name,
-                    )
-                    .expect("Error in counting instances from DB of selected event");
-                    // if let Some(selected) = event_list_state.selected() {
-                    //     let amount_events = read_events_from_db(&conn)
-                    //         .expect("can fetch EventItem list")
-                    //         .len();
-                    //     if selected >= amount_events - 1 {
-                    //         event_list_state.select(Some(0));
-                    //     } else {
-                    //         event_list_state.select(Some(selected + 1));
-                    //     }
-                    // }
+                Input {
+                    key: Key::Char('x'),
+                    ctrl: true,
+                    ..
+                } => {
+                    inactivate(&mut textarea[which]);
+                    which = (which + 1) % 2;
+                    activate(&mut textarea[which]);
                 }
-                KeyCode::Left => {
-                    active_block = ActiveBlock::EventBlock;
-                    // if let Some(selected) = event_list_state.selected() {
-                    //     let amount_events = read_events_from_db(&conn)
-                    //         .expect("can fetch EventItem list")
-                    //         .len();
-                    //     if selected >= amount_events - 1 {
-                    //         event_list_state.select(Some(0));
-                    //     } else {
-                    //         event_list_state.select(Some(selected + 1));
-                    //     }
-                    // }
+                input => {
+                    textarea[which].input(input);
                 }
-                _ => {}
-            },
-            Event::Tick => {}
+            }
+        } else {
+            match rx.recv()? {
+                Event::Input(event) => match event {
+                    KeyEvent {
+                        code: KeyCode::Char('q'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    } => {
+                        disable_raw_mode()?;
+                        terminal.show_cursor()?;
+                        break;
+                    }
+                    KeyEvent {
+                        code: KeyCode::Char('h'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    } => active_menu_item = MenuItem::Home,
+                    KeyEvent {
+                        code: KeyCode::Char('e'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    } => active_menu_item = MenuItem::Instances,
+                    KeyEvent {
+                        code: KeyCode::Char('a'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    } => active_menu_item = MenuItem::Add,
+                    // KeyCode::Char('a') => {
+                    //     add_random_pet_to_db().expect("can add new random EventItem");
+                    // }
+                    // KeyCode::Char('d') => {
+                    //     remove_pet_at_index(&mut event_list_state).expect("can remove EventItem");
+                    // }
+                    KeyEvent {
+                        code: KeyCode::Down,
+                        ..
+                    } => match active_block {
+                        ActiveBlock::EventBlock => {
+                            if let Some(selected) = event_list_state.selected() {
+                                let amount_events = read_events_from_db(&conn)
+                                    .expect("can fetch EventItem list")
+                                    .len();
+                                if selected >= amount_events - 1 {
+                                    event_list_state.select(Some(0));
+                                } else {
+                                    event_list_state.select(Some(selected + 1));
+                                }
+                            }
+                        }
+                        ActiveBlock::InstanceBlock => {
+                            if let Some(selected) = instance_list_state.selected() {
+                                if selected >= instance_count - 1 {
+                                    instance_list_state.select(Some(0));
+                                } else {
+                                    instance_list_state.select(Some(selected + 1));
+                                }
+                            }
+                        }
+                    },
+                    KeyEvent {
+                        code: KeyCode::Up, ..
+                    } => match active_block {
+                        ActiveBlock::EventBlock => {
+                            if let Some(selected) = event_list_state.selected() {
+                                let amount_events = read_events_from_db(&conn)
+                                    .expect("can fetch EventItem list")
+                                    .len();
+                                if selected > 0 {
+                                    event_list_state.select(Some(selected - 1));
+                                } else {
+                                    event_list_state.select(Some(amount_events - 1));
+                                }
+                            }
+                        }
+                        ActiveBlock::InstanceBlock => {
+                            if let Some(selected) = instance_list_state.selected() {
+                                if selected > 0 {
+                                    instance_list_state.select(Some(selected - 1));
+                                } else {
+                                    instance_list_state.select(Some(instance_count - 1));
+                                }
+                            }
+                        }
+                    },
+                    KeyEvent {
+                        code: KeyCode::Right,
+                        ..
+                    } => {
+                        active_block = ActiveBlock::InstanceBlock;
+                        instance_list_state.select(Some(0));
+                        instance_count = read_instances_count_from_db(
+                            &conn,
+                            &events
+                                .get(event_list_state.selected().unwrap())
+                                .expect("Event list state error")
+                                .name,
+                        )
+                        .expect("Error in counting instances from DB of selected event");
+                        // if let Some(selected) = event_list_state.selected() {
+                        //     let amount_events = read_events_from_db(&conn)
+                        //         .expect("can fetch EventItem list")
+                        //         .len();
+                        //     if selected >= amount_events - 1 {
+                        //         event_list_state.select(Some(0));
+                        //     } else {
+                        //         event_list_state.select(Some(selected + 1));
+                        //     }
+                        // }
+                    }
+                    KeyEvent {
+                        code: KeyCode::Left,
+                        ..
+                    } => {
+                        active_block = ActiveBlock::EventBlock;
+                        // if let Some(selected) = event_list_state.selected() {
+                        //     let amount_events = read_events_from_db(&conn)
+                        //         .expect("can fetch EventItem list")
+                        //         .len();
+                        //     if selected >= amount_events - 1 {
+                        //         event_list_state.select(Some(0));
+                        //     } else {
+                        //         event_list_state.select(Some(selected + 1));
+                        //     }
+                        // }
+                    }
+                    _ => {}
+                },
+                Event::Tick => {}
+            }
         }
     }
 
