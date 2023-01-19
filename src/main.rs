@@ -300,13 +300,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     break;
                 }
                 Input {
-                    key: Key::Char('x'),
-                    ctrl: true,
-                    ..
+                    key: Key::Enter, ..
                 } => {
                     inactivate(&mut textarea[which]);
-                    which = (which + 1) % 2;
-                    activate(&mut textarea[which]);
+                    which += 1;
+                    if which > (textarea.len() - 1) {
+                        which -= 1;
+                    } else {
+                        activate(&mut textarea[which]);
+                    }
                 }
                 input => {
                     textarea[which].input(input);
@@ -400,8 +402,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         code: KeyCode::Right,
                         ..
                     } => {
-                        active_block = ActiveBlock::InstanceBlock;
-                        instance_list_state.select(Some(0));
+                        // active_block = ActiveBlock::InstanceBlock;
+                        // instance_list_state.select(Some(0));
                         instance_count = read_instances_count_from_db(
                             &conn,
                             &events
@@ -410,6 +412,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .name,
                         )
                         .expect("Error in counting instances from DB of selected event");
+
+                        if instance_count > 0 {
+                            active_block = ActiveBlock::InstanceBlock;
+                            instance_list_state.select(Some(0));
+                        }
                         // if let Some(selected) = event_list_state.selected() {
                         //     let amount_events = read_events_from_db(&conn)
                         //         .expect("can fetch EventItem list")
