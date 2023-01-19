@@ -306,12 +306,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     which += 1;
                     if which > (textarea.len() - 1) {
                         which -= 1;
+                        // TODO popup here
                     } else {
                         activate(&mut textarea[which]);
                     }
                 }
+                Input { key: Key::Esc, .. } => {
+                    inactivate(&mut textarea[which]);
+                    which = which.saturating_sub(1);
+                    activate(&mut textarea[which]);
+                }
                 input => {
                     textarea[which].input(input);
+                    // TODO Check inputs
                 }
             }
         } else {
@@ -402,8 +409,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         code: KeyCode::Right,
                         ..
                     } => {
-                        // active_block = ActiveBlock::InstanceBlock;
-                        // instance_list_state.select(Some(0));
                         instance_count = read_instances_count_from_db(
                             &conn,
                             &events
@@ -417,32 +422,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             active_block = ActiveBlock::InstanceBlock;
                             instance_list_state.select(Some(0));
                         }
-                        // if let Some(selected) = event_list_state.selected() {
-                        //     let amount_events = read_events_from_db(&conn)
-                        //         .expect("can fetch EventItem list")
-                        //         .len();
-                        //     if selected >= amount_events - 1 {
-                        //         event_list_state.select(Some(0));
-                        //     } else {
-                        //         event_list_state.select(Some(selected + 1));
-                        //     }
-                        // }
                     }
                     KeyEvent {
                         code: KeyCode::Left,
                         ..
                     } => {
                         active_block = ActiveBlock::EventBlock;
-                        // if let Some(selected) = event_list_state.selected() {
-                        //     let amount_events = read_events_from_db(&conn)
-                        //         .expect("can fetch EventItem list")
-                        //         .len();
-                        //     if selected >= amount_events - 1 {
-                        //         event_list_state.select(Some(0));
-                        //     } else {
-                        //         event_list_state.select(Some(selected + 1));
-                        //     }
-                        // }
                     }
                     _ => {}
                 },
@@ -466,7 +451,7 @@ fn render_home<'a>() -> Paragraph<'a> {
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press 'e' to access events, 'a' to add random new events and 'd' to delete the currently selected EventItem.")]),
+        Spans::from(vec![Span::raw("Press 'Alt+e' to access events, 'Alt+a' to add instances and 'Alt+u' to update and 'Alt+d' to delete the currently selected EventItem.")]),
     ])
     .alignment(Alignment::Center)
     .block(
