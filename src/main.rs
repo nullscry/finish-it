@@ -14,7 +14,7 @@ use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
+    text::{self, Span, Spans},
     widgets::{
         Block, BorderType, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table,
         TableState, Tabs,
@@ -139,7 +139,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let events = read_events_from_db(&conn).expect("can fetch EventItem list");
 
-    let mut textarea = [
+    let mut text_areas = [
         TextArea::default(),
         TextArea::default(),
         TextArea::default(),
@@ -167,12 +167,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut which: usize = 0;
 
-    for (ta, title) in textarea.iter_mut().zip(titles) {
+    for (ta, title) in text_areas.iter_mut().zip(titles) {
         initialize_title(ta, title);
     }
 
-    activate(&mut textarea[0]);
-    for ta in textarea.iter_mut().skip(1) {
+    activate(&mut text_areas[0]);
+    for ta in text_areas.iter_mut().skip(1) {
         inactivate(ta);
     }
     loop {
@@ -269,8 +269,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     layout_cols.append(&mut layout_cols_lower);
 
-                    for (textarea, chunk) in textarea.iter().zip(layout_cols) {
-                        let widget = textarea.widget();
+                    for (text_area, chunk) in text_areas.iter().zip(layout_cols) {
+                        let widget = text_area.widget();
                         rect.render_widget(widget, chunk);
                     }
                 }
@@ -302,22 +302,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Input {
                     key: Key::Enter, ..
                 } => {
-                    inactivate(&mut textarea[which]);
+                    inactivate(&mut text_areas[which]);
                     which += 1;
-                    if which > (textarea.len() - 1) {
+                    if which > (text_areas.len() - 1) {
                         which -= 1;
+                        insert_into_db(&conn, &text_areas);
                         // TODO popup here
                     } else {
-                        activate(&mut textarea[which]);
+                        activate(&mut text_areas[which]);
                     }
                 }
                 Input { key: Key::Esc, .. } => {
-                    inactivate(&mut textarea[which]);
+                    inactivate(&mut text_areas[which]);
                     which = which.saturating_sub(1);
-                    activate(&mut textarea[which]);
+                    activate(&mut text_areas[which]);
                 }
                 input => {
-                    textarea[which].input(input);
+                    text_areas[which].input(input);
                     // TODO Check inputs
                 }
             }
@@ -670,6 +671,26 @@ fn read_instances_from_db(
     }
 
     Ok(instances)
+}
+
+fn insert_into_db(conn: &Connection, text_areas: &[TextArea]) -> Result<(), rusqlite::Error> {
+    let default = String::from("0");
+    let texts: Vec<&str> = text_areas
+        .into_iter()
+        .map(|text_area| text_area.lines().get(0).unwrap_or(&default).trim())
+        .collect();
+
+    conn.execute(
+        "INSERT OR IGNORE INTO events(name, eventgroup) VALUES (?1, ?2)",
+        (texts[0], texts[1]),
+    )?;
+
+    conn.execute(
+        "INSERT INTO instances(name, eventtype, isrecurring, isfinished, percentage, timesfinished, daylimit) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        (texts[2], texts[1], texts[3], texts[4], texts[5], texts[6], texts[7]),
+    )?;
+
+    Ok(())
 }
 
 // fn add_random_pet_to_db() -> Result<Vec<EventItem>, Error> {
