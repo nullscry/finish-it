@@ -15,7 +15,7 @@ CREATE TABLE instances(
     timesfinished INTEGER DEFAULT 0 NOT NULL,
     daylimit INTEGER DEFAULT 0 NOT NULL,
     created TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    FOREIGN KEY(eventtype) REFERENCES event(name)
+    FOREIGN KEY(eventtype) REFERENCES events(name)
         ON DELETE CASCADE
         ON UPDATE CASCADE
 );

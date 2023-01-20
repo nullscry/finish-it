@@ -681,13 +681,13 @@ fn insert_into_db(conn: &Connection, text_areas: &[TextArea]) -> Result<(), rusq
         .collect();
 
     conn.execute(
-        "INSERT OR IGNORE INTO events(name, eventgroup) VALUES (?1, ?2)",
+        "INSERT OR IGNORE INTO events (name, eventgroup) VALUES (?1, ?2)",
         (texts[0], texts[1]),
     )?;
 
     conn.execute(
-        "INSERT INTO instances(name, eventtype, isrecurring, isfinished, percentage, timesfinished, daylimit) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        (texts[2], texts[1], texts[3], texts[4], texts[5], texts[6], texts[7]),
+        "INSERT INTO instances (name, eventtype, isrecurring, isfinished, percentage, timesfinished, daylimit) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        (texts[2], texts[0], texts[3], texts[4], texts[5], texts[6], texts[7]),
     )?;
 
     Ok(())
