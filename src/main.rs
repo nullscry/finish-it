@@ -56,6 +56,19 @@ pub struct InstanceItem {
     created: DateTime<Utc>,
 }
 
+impl InstanceItem {
+    pub fn get_dot_vec(&self) -> String {
+        let p = self.percentage as usize;
+        let p = p / 5;
+        let r = 20 - p;
+
+        let filled = std::iter::repeat("█").take(p).collect::<String>();
+        let remaining = std::iter::repeat("░").take(r).collect::<String>();
+        [filled, remaining].concat()
+        // String::from_utf8([vec![b'█'; p], vec![b'░'; remaining]].concat()).unwrap()
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("error reading the DB file: {0}")]

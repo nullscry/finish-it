@@ -86,7 +86,7 @@ pub fn render_events<'a>(
         rows.push(Row::new(vec![
             Cell::from(Span::raw(instance.instanceid.to_string())),
             Cell::from(Span::raw(instance.name.to_string())),
-            Cell::from(Span::raw(instance.eventtype.to_string())),
+            Cell::from(Span::raw(instance.get_dot_vec())),
             Cell::from(Span::raw(instance.isrecurring.to_string())),
             Cell::from(Span::raw(instance.isfinished.to_string())),
             Cell::from(Span::raw(instance.percentage.to_string())),
@@ -107,7 +107,7 @@ pub fn render_events<'a>(
                 Style::default().add_modifier(Modifier::BOLD),
             )),
             Cell::from(Span::styled(
-                "Category",
+                "Progress",
                 Style::default().add_modifier(Modifier::BOLD),
             )),
             Cell::from(Span::styled(
@@ -145,13 +145,13 @@ pub fn render_events<'a>(
         .widths(&[
             Constraint::Percentage(5),
             Constraint::Percentage(20),
-            Constraint::Percentage(20),
+            Constraint::Percentage(35),
             Constraint::Percentage(5),
             Constraint::Percentage(5),
             Constraint::Percentage(5),
             Constraint::Percentage(5),
             Constraint::Percentage(5),
-            Constraint::Percentage(20),
+            Constraint::Percentage(15),
         ])
         .highlight_style(
             Style::default()
