@@ -93,7 +93,7 @@ pub fn insert_into_db(
 ) -> Result<(), rusqlite::Error> {
     let default = String::from("0");
     let texts: Vec<&str> = text_areas
-        .into_iter()
+        .iter()
         .map(|ta| ta.text_area.lines().get(0).unwrap_or(&default).trim())
         .collect();
 

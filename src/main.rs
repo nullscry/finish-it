@@ -62,8 +62,8 @@ impl InstanceItem {
         let p = p / 5;
         let r = 20 - p;
 
-        let filled = std::iter::repeat("█").take(p).collect::<String>();
-        let remaining = std::iter::repeat("░").take(r).collect::<String>();
+        let filled = "█".repeat(p);
+        let remaining = "░".repeat(r);
         [filled, remaining].concat()
         // String::from_utf8([vec![b'█'; p], vec![b'░'; remaining]].concat()).unwrap()
     }
