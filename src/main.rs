@@ -4,11 +4,11 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use serde::{Deserialize, Serialize};
-use std::io;
-use std::path;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use std::{char::ParseCharError, path};
+use std::{io, str::FromStr};
 use thiserror::Error;
 use tui::{
     backend::CrosstermBackend,
@@ -23,7 +23,7 @@ use tui::{
 };
 use tui_textarea::{Input, Key, TextArea};
 mod add;
-use add::{activate, inactivate, initialize_title};
+use add::TextAreaContainer;
 
 use rusqlite::{Connection, Result};
 
@@ -96,12 +96,46 @@ fn get_db_connection() -> Connection {
     Connection::open(db_path).unwrap()
 }
 
+// fn validate_num<T, E>(text_area: &mut TextArea) -> bool
+// where
+//     T: FromStr<Err = E>,
+//     E: std::fmt::Display,
+// {
+//     let title = text_area.block().unwrap().title(title)
+//     if let Err(err) = text_area.lines()[0].parse::<T>() {
+//         text_area.set_style(Style::default().fg(Color::LightRed));
+//         text_area.set_block(
+//             Block::default()
+//                 .borders(Borders::ALL)
+//                 .title(format!("ERROR: {}", err)),
+//         );
+//         false
+//     } else {
+//         text_area.set_style(Style::default().fg(Color::LightGreen));
+//         text_area.set_block(Block::default().borders(Borders::ALL).title("OK"));
+//         true
+//     }
+// }
+
+// fn reset_text_area(text_area: &mut TextArea) {
+
+//     text_area.set_style(Style::default().fg(Color::LightRed));
+//     text_area.set_block(
+//         Block::default()
+//             .borders(Borders::ALL)
+//             .title(format!("ERROR: {}", err)),
+
+//     text_area.set_style(Style::default().fg(Color::LightGreen));
+//     text_area.set_block(Block::default().borders(Borders::ALL).title("OK"));
+
+// }
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = get_db_connection();
     enable_raw_mode().expect("can run in raw mode");
 
     let (tx, rx) = mpsc::channel();
-    let tick_rate = Duration::from_millis(200);
+    let tick_rate = Duration::from_millis(100);
     thread::spawn(move || {
         let mut last_tick = Instant::now();
         loop {
@@ -140,26 +174,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let events = read_events_from_db(&conn).expect("can fetch EventItem list");
 
     let mut text_areas = [
-        TextArea::default(),
-        TextArea::default(),
-        TextArea::default(),
-        TextArea::default(),
-        TextArea::default(),
-        TextArea::default(),
-        TextArea::default(),
-        TextArea::default(),
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Event Name".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Event Type".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Instance Name".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Is Recurring?".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Is Finished?".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "% Completed".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "# Completed".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Remaining Days".to_string(),
+        },
     ];
 
-    let titles = [
-        "Event Name",
-        "Event Type",
-        "Instance Name",
-        "Is Recurring?",
-        "Is Finished?",
-        "% Completed",
-        "# Completed",
-        "Remaining Days",
-    ];
+    // let titles = [
+    //     "Event Name",
+    //     "Event Type",
+    //     "Instance Name",
+    //     "Is Recurring?",
+    //     "Is Finished?",
+    //     "% Completed",
+    //     "# Completed",
+    //     "Remaining Days",
+    // ];
 
     let layout_rows = Layout::default()
         .direction(Direction::Vertical)
@@ -167,14 +225,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut which: usize = 0;
 
-    for (ta, title) in text_areas.iter_mut().zip(titles) {
-        initialize_title(ta, title);
+    for ta in text_areas.iter_mut() {
+        ta.initialize_title();
     }
 
-    activate(&mut text_areas[0]);
+    text_areas[0].activate();
     for ta in text_areas.iter_mut().skip(1) {
-        inactivate(ta);
+        ta.inactivate();
     }
+
     loop {
         terminal.draw(|rect| {
             let size = rect.size();
@@ -269,8 +328,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                     layout_cols.append(&mut layout_cols_lower);
 
-                    for (text_area, chunk) in text_areas.iter().zip(layout_cols) {
-                        let widget = text_area.widget();
+                    for (ta, chunk) in text_areas.iter().zip(layout_cols) {
+                        let widget = ta.text_area.widget();
                         rect.render_widget(widget, chunk);
                     }
                 }
@@ -302,24 +361,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Input {
                     key: Key::Enter, ..
                 } => {
-                    inactivate(&mut text_areas[which]);
+                    text_areas[which].inactivate();
                     which += 1;
                     if which > (text_areas.len() - 1) {
                         which -= 1;
-                        insert_into_db(&conn, &text_areas);
+                        insert_into_db(&conn, &text_areas)?;
                         // TODO popup here
                     } else {
-                        activate(&mut text_areas[which]);
+                        text_areas[which].activate();
                     }
                 }
                 Input { key: Key::Esc, .. } => {
-                    inactivate(&mut text_areas[which]);
+                    text_areas[which].inactivate();
                     which = which.saturating_sub(1);
-                    activate(&mut text_areas[which]);
+                    text_areas[which].activate();
                 }
                 input => {
-                    text_areas[which].input(input);
-                    // TODO Check inputs
+                    if text_areas[which].text_area.input(input) {
+                        // is_valid = validate(&mut text_areas[which], which);
+                    }
                 }
             }
         } else {
@@ -673,11 +733,14 @@ fn read_instances_from_db(
     Ok(instances)
 }
 
-fn insert_into_db(conn: &Connection, text_areas: &[TextArea]) -> Result<(), rusqlite::Error> {
+fn insert_into_db(
+    conn: &Connection,
+    text_areas: &[TextAreaContainer],
+) -> Result<(), rusqlite::Error> {
     let default = String::from("0");
     let texts: Vec<&str> = text_areas
         .into_iter()
-        .map(|text_area| text_area.lines().get(0).unwrap_or(&default).trim())
+        .map(|ta| ta.text_area.lines().get(0).unwrap_or(&default).trim())
         .collect();
 
     conn.execute(
