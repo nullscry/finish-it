@@ -44,3 +44,51 @@ impl TextAreaContainer<'_> {
         self.text_area.set_block(b.style(Style::default()));
     }
 }
+
+pub fn get_text_areas() -> [TextAreaContainer<'static>; 8] {
+    let mut text_areas = [
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Event Name".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Event Type".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Instance Name".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Is Recurring?".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Is Finished?".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "% Completed".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "# Completed".to_string(),
+        },
+        TextAreaContainer {
+            text_area: TextArea::default(),
+            title: "Remaining Days".to_string(),
+        },
+    ];
+
+    for ta in text_areas.iter_mut() {
+        ta.initialize_title();
+    }
+
+    text_areas[0].activate();
+    for ta in text_areas.iter_mut().skip(1) {
+        ta.inactivate();
+    }
+
+    text_areas
+}

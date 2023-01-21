@@ -4,38 +4,46 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use serde::{Deserialize, Serialize};
+use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::{char::ParseCharError, path};
-use std::{io, str::FromStr};
 use thiserror::Error;
+
 use tui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{self, Span, Spans},
-    widgets::{
-        Block, BorderType, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table,
-        TableState, Tabs,
-    },
+    text::{Span, Spans},
+    widgets::{Block, BorderType, Borders, ListState, Paragraph, TableState, Tabs},
     Terminal,
 };
-use tui_textarea::{Input, Key, TextArea};
+use tui_textarea::{Input, Key};
 mod add;
-use add::TextAreaContainer;
+use add::get_text_areas;
 
-use rusqlite::{Connection, Result};
+mod db;
+use db::*;
+
+mod render;
+use render::*;
+
+use rusqlite::Result;
+
+pub enum ActiveBlock {
+    EventBlock,
+    InstanceBlock,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct EventItem {
+pub struct EventItem {
     name: String,
     eventgroup: String,
     created: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct InstanceItem {
+pub struct InstanceItem {
     instanceid: usize,
     name: String,
     eventtype: String,
@@ -68,11 +76,6 @@ enum MenuItem {
     Add,
 }
 
-enum ActiveBlock {
-    EventBlock,
-    InstanceBlock,
-}
-
 impl From<MenuItem> for usize {
     fn from(input: MenuItem) -> usize {
         match input {
@@ -81,19 +84,6 @@ impl From<MenuItem> for usize {
             MenuItem::Add => 2,
         }
     }
-}
-
-fn get_db_connection() -> Connection {
-    let db_path = path::Path::new("var/fit.db");
-
-    if !path::Path::exists(db_path) {
-        panic!(
-            "Problem opening the file: {0:?}\nExecute \"fitdb create\" to initialize database at {0:?}",
-            db_path
-        );
-    }
-
-    Connection::open(db_path).unwrap()
 }
 
 // fn validate_num<T, E>(text_area: &mut TextArea) -> bool
@@ -173,66 +163,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let events = read_events_from_db(&conn).expect("can fetch EventItem list");
 
-    let mut text_areas = [
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Event Name".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Event Type".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Instance Name".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Is Recurring?".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Is Finished?".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "% Completed".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "# Completed".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Remaining Days".to_string(),
-        },
-    ];
-
-    // let titles = [
-    //     "Event Name",
-    //     "Event Type",
-    //     "Instance Name",
-    //     "Is Recurring?",
-    //     "Is Finished?",
-    //     "% Completed",
-    //     "# Completed",
-    //     "Remaining Days",
-    // ];
+    let mut text_areas = get_text_areas();
 
     let layout_rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref());
 
     let mut which: usize = 0;
-
-    for ta in text_areas.iter_mut() {
-        ta.initialize_title();
-    }
-
-    text_areas[0].activate();
-    for ta in text_areas.iter_mut().skip(1) {
-        ta.inactivate();
-    }
 
     loop {
         terminal.draw(|rect| {
@@ -496,262 +433,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-
-    Ok(())
-}
-
-fn render_home<'a>() -> Paragraph<'a> {
-    let home = Paragraph::new(vec![
-        Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Welcome")]),
-        Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("to")]),
-        Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::styled(
-            "EventItem-CLI",
-            Style::default().fg(Color::LightBlue),
-        )]),
-        Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press 'Alt+e' to access events, 'Alt+a' to add instances and 'Alt+u' to update and 'Alt+d' to delete the currently selected EventItem.")]),
-    ])
-    .alignment(Alignment::Center)
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .style(Style::default().fg(Color::White))
-            .title("Home")
-            .border_type(BorderType::Plain),
-    );
-    home
-}
-
-fn render_events<'a>(
-    event_list_state: &ListState,
-    conn: &Connection,
-    active_block: &ActiveBlock,
-) -> (List<'a>, Table<'a>) {
-    let (list_highlight, table_highlight) = match active_block {
-        ActiveBlock::EventBlock => (Color::Red, Color::Yellow),
-        ActiveBlock::InstanceBlock => (Color::Yellow, Color::Red),
-    };
-    let events = Block::default()
-        .borders(Borders::ALL)
-        .style(Style::default().fg(Color::White))
-        .title("events")
-        .border_type(BorderType::Plain);
-
-    let event_list = read_events_from_db(conn).expect("can fetch EventItem list");
-
-    let items: Vec<_> = event_list
-        .iter()
-        .map(|instance| {
-            ListItem::new(Spans::from(vec![Span::styled(
-                instance.name.clone(),
-                Style::default(),
-            )]))
-        })
-        .collect();
-
-    let selected_event = event_list
-        .get(
-            event_list_state
-                .selected()
-                .expect("there is always a selected EventItem"),
-        )
-        .expect("exists")
-        .clone();
-
-    let list = List::new(items).block(events).highlight_style(
-        Style::default()
-            .bg(list_highlight)
-            .fg(Color::Black)
-            .add_modifier(Modifier::BOLD),
-    );
-
-    let instance_list =
-        read_instances_from_db(conn, &selected_event.name).expect("can fetch EventItem list");
-
-    let mut rows: Vec<Row<'a>> = Vec::new();
-    for instance in instance_list {
-        rows.push(Row::new(vec![
-            Cell::from(Span::raw(instance.instanceid.to_string())),
-            Cell::from(Span::raw(instance.name.to_string())),
-            Cell::from(Span::raw(instance.eventtype.to_string())),
-            Cell::from(Span::raw(instance.isrecurring.to_string())),
-            Cell::from(Span::raw(instance.isfinished.to_string())),
-            Cell::from(Span::raw(instance.percentage.to_string())),
-            Cell::from(Span::raw(instance.timesfinished.to_string())),
-            Cell::from(Span::raw(instance.daylimit.to_string())),
-            Cell::from(Span::raw(instance.created.to_string())),
-        ]));
-    }
-
-    let instance_detail = Table::new(rows)
-        .header(Row::new(vec![
-            Cell::from(Span::styled(
-                "ID",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Name",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Category",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Recur",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Completed",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Completed %",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Completed #",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Day Limit",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Created At",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::White))
-                .title("Detail")
-                .border_type(BorderType::Plain),
-        )
-        .widths(&[
-            Constraint::Percentage(5),
-            Constraint::Percentage(20),
-            Constraint::Percentage(20),
-            Constraint::Percentage(5),
-            Constraint::Percentage(5),
-            Constraint::Percentage(5),
-            Constraint::Percentage(5),
-            Constraint::Percentage(5),
-            Constraint::Percentage(20),
-        ])
-        .highlight_style(
-            Style::default()
-                .bg(table_highlight)
-                .fg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-        );
-
-    // let selected_instance = instance_list
-    //     .get(
-    //         instance_list_state
-    //             .selected()
-    //             .expect("there is always a selected EventItem"),
-    //     )
-    //     .expect("exists")
-    //     .clone();
-
-    (list, instance_detail)
-}
-
-fn read_events_from_db(conn: &Connection) -> Result<Vec<EventItem>, rusqlite::Error> {
-    let mut stmt = conn.prepare("SELECT * FROM events")?;
-    let event_iter = stmt.query_map([], |row| {
-        Ok(EventItem {
-            name: row.get(0)?,
-            eventgroup: row.get(1)?,
-            created: row.get(2)?,
-        })
-    })?;
-
-    let mut events = Vec::new();
-    for event in event_iter {
-        events.push(event?);
-    }
-
-    Ok(events)
-}
-
-fn read_instances_count_from_db(
-    conn: &Connection,
-    selected_event: &str,
-) -> Result<usize, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        format!(
-            "SELECT COUNT(*) FROM instances WHERE eventtype = \"{}\"",
-            selected_event
-        )
-        .as_str(),
-    )?;
-    let mut rows = (stmt.query([]))?;
-
-    let row = rows.next().unwrap().expect("Invalid Event");
-    let instance_count: usize = row.get(0).expect("Invalid Event");
-
-    Ok(instance_count)
-}
-
-fn read_instances_from_db(
-    conn: &Connection,
-    event_name: &str,
-) -> Result<Vec<InstanceItem>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        format!(
-            "SELECT * FROM instances WHERE eventtype = \"{}\"",
-            event_name
-        )
-        .as_str(),
-    )?;
-    let instance_iter = stmt.query_map([], |row| {
-        Ok(InstanceItem {
-            instanceid: row.get(0)?,
-            name: row.get(1)?,
-            eventtype: row.get(2)?,
-            isrecurring: row.get(3)?,
-            isfinished: row.get(4)?,
-            percentage: row.get(5)?,
-            timesfinished: row.get(6)?,
-            daylimit: row.get(7)?,
-            // lastfinished: row.get(8)?,
-            created: row.get(8)?,
-        })
-    })?;
-
-    let mut instances = Vec::new();
-    for instance in instance_iter {
-        instances.push(instance?);
-    }
-
-    Ok(instances)
-}
-
-fn insert_into_db(
-    conn: &Connection,
-    text_areas: &[TextAreaContainer],
-) -> Result<(), rusqlite::Error> {
-    let default = String::from("0");
-    let texts: Vec<&str> = text_areas
-        .into_iter()
-        .map(|ta| ta.text_area.lines().get(0).unwrap_or(&default).trim())
-        .collect();
-
-    conn.execute(
-        "INSERT OR IGNORE INTO events (name, eventgroup) VALUES (?1, ?2)",
-        (texts[0], texts[1]),
-    )?;
-
-    conn.execute(
-        "INSERT INTO instances (name, eventtype, isrecurring, isfinished, percentage, timesfinished, daylimit) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        (texts[2], texts[0], texts[3], texts[4], texts[5], texts[6], texts[7]),
-    )?;
 
     Ok(())
 }
