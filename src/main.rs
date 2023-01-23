@@ -38,7 +38,6 @@ pub enum ActiveBlock {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EventItem {
     name: String,
-    eventgroup: String,
     created: DateTime<Utc>,
 }
 
@@ -65,7 +64,6 @@ impl InstanceItem {
         let filled = "█".repeat(p);
         let remaining = "░".repeat(r);
         [filled, remaining].concat()
-        // String::from_utf8([vec![b'█'; p], vec![b'░'; remaining]].concat()).unwrap()
     }
 }
 
@@ -178,9 +176,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut text_areas = get_text_areas();
 
-    let layout_rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref());
+    // let layout_rows = Layout::default()
+    //     .direction(Direction::Vertical)
+    //     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref());
 
     let mut which: usize = 0;
 
@@ -200,14 +198,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .split(size);
 
-            let copyright = Paragraph::new("Finish-it 2023 - all rights reserved")
+            let copyright = Paragraph::new("Hit Enter to enter Edit mode. Edit Progress with <-, -> and Enter again to confirm. Alt+W to delete selected instance.")
                 .style(Style::default().fg(Color::LightCyan))
                 .alignment(Alignment::Center)
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
                         .style(Style::default().fg(Color::White))
-                        .title("Copyright")
+                        .title("Modifying")
                         .border_type(BorderType::Plain),
                 );
 
@@ -250,38 +248,74 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     rect.render_stateful_widget(right, event_chunks[1], &mut instance_list_state);
                 }
                 MenuItem::Add => {
-                    let add_chunks = layout_rows.split(chunks[1]);
-                    let mut layout_cols = Layout::default()
+                    // let add_chunks = layout_rows.split(chunks[1]);
+                    let cols = Layout::default()
                         .direction(Direction::Horizontal)
                         .constraints(
                             [
-                                Constraint::Percentage(25),
-                                Constraint::Percentage(25),
-                                Constraint::Percentage(25),
-                                Constraint::Percentage(25),
+                                Constraint::Percentage(50),
+                                Constraint::Percentage(50),
                             ]
                             .as_ref(),
                         )
-                        .split(add_chunks[0]);
-                    let mut layout_cols_lower = Layout::default()
-                        .direction(Direction::Horizontal)
+                        .split(chunks[1]);
+                    let layout_cols = Layout::default()
+                        .direction(Direction::Vertical)
                         .constraints(
                             [
-                                Constraint::Percentage(25),
-                                Constraint::Percentage(25),
-                                Constraint::Percentage(25),
-                                Constraint::Percentage(25),
+                                Constraint::Percentage(15),
+                                Constraint::Percentage(15),
+                                Constraint::Percentage(14),
+                                Constraint::Percentage(14),
+                                Constraint::Percentage(14),
+                                Constraint::Percentage(14),
+                                Constraint::Percentage(14),
                             ]
                             .as_ref(),
                         )
-                        .split(add_chunks[1]);
+                        .split(cols[0]);
+                    // let mut layout_cols_lower = Layout::default()
+                    //     .direction(Direction::Horizontal)
+                    //     .constraints(
+                    //         [
+                    //             Constraint::Percentage(25),
+                    //             Constraint::Percentage(25),
+                    //             Constraint::Percentage(25),
+                    //             Constraint::Percentage(25),
+                    //         ]
+                    //         .as_ref(),
+                    //     )
+                    //     .split(add_chunks[1]);
 
-                    layout_cols.append(&mut layout_cols_lower);
+                    // layout_cols.append(&mut layout_cols_lower);
 
                     for (ta, chunk) in text_areas.iter().zip(layout_cols) {
                         let widget = ta.text_area.widget();
                         rect.render_widget(widget, chunk);
                     }
+
+                    let home = Paragraph::new(vec![
+                        Spans::from(vec![Span::raw("")]),
+                        Spans::from(vec![Span::raw("Welcome")]),
+                        Spans::from(vec![Span::raw("")]),
+                        Spans::from(vec![Span::raw("to")]),
+                        Spans::from(vec![Span::raw("")]),
+                        Spans::from(vec![Span::styled(
+                            "EventItem-CLI",
+                            Style::default().fg(Color::LightBlue),
+                        )]),
+                        Spans::from(vec![Span::raw("")]),
+                        Spans::from(vec![Span::raw("Press 'Alt+e' to access events, 'Alt+a' to add instances and 'Alt+u' to update and 'Alt+d' to delete the currently selected EventItem.")]),
+                    ])
+                    .alignment(Alignment::Center)
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .style(Style::default().fg(Color::White))
+                            .title("Home")
+                            .border_type(BorderType::Plain),
+                    );
+                    rect.render_widget(home, cols[1]);
                 }
             }
             rect.render_widget(copyright, chunks[2]);

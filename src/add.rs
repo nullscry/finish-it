@@ -45,15 +45,11 @@ impl TextAreaContainer<'_> {
     }
 }
 
-pub fn get_text_areas() -> [TextAreaContainer<'static>; 8] {
+pub fn get_text_areas() -> [TextAreaContainer<'static>; 7] {
     let mut text_areas = [
         TextAreaContainer {
             text_area: TextArea::default(),
             title: "Event Name".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Event Type".to_string(),
         },
         TextAreaContainer {
             text_area: TextArea::default(),

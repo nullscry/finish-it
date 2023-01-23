@@ -21,8 +21,7 @@ pub fn read_events_from_db(conn: &Connection) -> Result<Vec<EventItem>, rusqlite
     let event_iter = stmt.query_map([], |row| {
         Ok(EventItem {
             name: row.get(0)?,
-            eventgroup: row.get(1)?,
-            created: row.get(2)?,
+            created: row.get(1)?,
         })
     })?;
 
@@ -98,13 +97,13 @@ pub fn insert_into_db(
         .collect();
 
     conn.execute(
-        "INSERT OR IGNORE INTO events (name, eventgroup) VALUES (?1, ?2)",
-        (texts[0], texts[1]),
+        "INSERT OR IGNORE INTO events (name) VALUES (?1)",
+        (texts[0],),
     )?;
 
     conn.execute(
         "INSERT INTO instances (name, eventtype, isrecurring, isfinished, percentage, timesfinished, daylimit) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        (texts[2], texts[0], texts[3], texts[4], texts[5], texts[6], texts[7]),
+        (texts[1], texts[0], texts[2], texts[3], texts[4], texts[5], texts[6]),
     )?;
 
     Ok(())
