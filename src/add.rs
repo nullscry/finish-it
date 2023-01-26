@@ -7,10 +7,10 @@ use tui::{
     widgets::{Block, BorderType, Borders, Paragraph},
 };
 pub enum AreaType {
-    UIntArea,
-    FloatArea,
-    BoolArea,
-    StringArea,
+    UInt,
+    Float,
+    Bool,
+    String,
 }
 
 pub struct TextAreaContainer<'a> {
@@ -76,15 +76,15 @@ impl TextAreaContainer<'_> {
 
     pub fn validate(&mut self) {
         self.ok = match self.area_type {
-            AreaType::UIntArea => self.validate_value_uint(),
-            AreaType::FloatArea => self.validate_value_float(),
-            AreaType::BoolArea => self.validate_value_bool(),
-            AreaType::StringArea => self.validate_value_string(),
+            AreaType::UInt => self.validate_value_uint(),
+            AreaType::Float => self.validate_value_float(),
+            AreaType::Bool => self.validate_value_bool(),
+            AreaType::String => self.validate_value_string(),
         }
     }
 
     fn validate_value_string(&mut self) -> bool {
-        if self.text_area.lines()[0].trim().len() > 0 {
+        if !self.text_area.lines()[0].is_empty() {
             self.set_border_ok();
             true
         } else {
@@ -96,7 +96,7 @@ impl TextAreaContainer<'_> {
     fn validate_value_float(&mut self) -> bool {
         match self.text_area.lines()[0].parse::<f64>() {
             Ok(x) => {
-                if x >= 0.0 && x <= 100.0 {
+                if (0.0..=100.0).contains(&x) {
                     self.set_border_ok();
                     true
                 } else {
@@ -150,13 +150,13 @@ impl TextAreaContainer<'_> {
 
 pub fn get_text_areas() -> [TextAreaContainer<'static>; 7] {
     let mut text_areas = [
-        TextAreaContainer::new("Event Name".to_string(), AreaType::StringArea),
-        TextAreaContainer::new("Instance Name".to_string(), AreaType::StringArea),
-        TextAreaContainer::new("Is Recurring? (0 OR 1)".to_string(), AreaType::BoolArea),
-        TextAreaContainer::new("Is Finished? (0 OR 1)".to_string(), AreaType::BoolArea),
-        TextAreaContainer::new("% Completed [0.0, 100.0]".to_string(), AreaType::FloatArea),
-        TextAreaContainer::new("# Completed [0, ...]".to_string(), AreaType::UIntArea),
-        TextAreaContainer::new("Day Limit [0, ...]".to_string(), AreaType::UIntArea),
+        TextAreaContainer::new("Event Name".to_string(), AreaType::String),
+        TextAreaContainer::new("Instance Name".to_string(), AreaType::String),
+        TextAreaContainer::new("Is Recurring? (0 OR 1)".to_string(), AreaType::Bool),
+        TextAreaContainer::new("Is Finished? (0 OR 1)".to_string(), AreaType::Bool),
+        TextAreaContainer::new("% Completed [0.0, 100.0]".to_string(), AreaType::Float),
+        TextAreaContainer::new("# Completed [0, ...]".to_string(), AreaType::UInt),
+        TextAreaContainer::new("Day Limit [0, ...]".to_string(), AreaType::UInt),
     ];
 
     for ta in text_areas.iter_mut() {
@@ -179,11 +179,7 @@ pub fn validate_text_areas(text_areas: &[TextAreaContainer<'static>; 7]) -> bool
         .iter()
         .sum::<u8>();
 
-    if ok_sum == text_areas.len() as u8 {
-        true
-    } else {
-        false
-    }
+    ok_sum == text_areas.len() as u8
 }
 
 pub fn get_add_err_text() -> Paragraph<'static> {
