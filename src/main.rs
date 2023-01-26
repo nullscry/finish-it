@@ -30,6 +30,7 @@ use render::*;
 
 use rusqlite::Result;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ActiveBlock {
     EventBlock,
     InstanceBlock,
@@ -102,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode().expect("can run in raw mode");
 
     let (tx, rx) = mpsc::channel();
-    let tick_rate = Duration::from_millis(100);
+    let tick_rate = Duration::from_millis(200);
     thread::spawn(move || {
         let mut last_tick = Instant::now();
         loop {
@@ -128,23 +129,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
 
     let menu_titles = vec!["Home", "Events", "Add", "Delete", "Quit"];
+
     let mut active_menu_item = MenuItem::Home;
+    let mut active_block = ActiveBlock::EventBlock;
+
     let mut event_list_state = ListState::default();
     event_list_state.select(Some(0));
 
     let mut instance_list_state = TableState::default();
     instance_list_state.select(Some(0));
 
-    let mut active_block = ActiveBlock::EventBlock;
     let mut instance_count = 0;
 
     let events = read_events_from_db(&conn).expect("can fetch EventItem list");
 
     let mut text_areas = get_text_areas();
 
-    // let layout_rows = Layout::default()
-    //     .direction(Direction::Vertical)
-    //     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref());
     let mut add_given_ok = false;
 
     let mut which: usize = 0;
@@ -215,7 +215,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     rect.render_stateful_widget(right, event_chunks[1], &mut instance_list_state);
                 }
                 MenuItem::Add => {
-                    // let add_chunks = layout_rows.split(chunks[1]);
                     let cols = Layout::default()
                         .direction(Direction::Horizontal)
                         .constraints(
@@ -241,21 +240,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .as_ref(),
                         )
                         .split(cols[0]);
-                    // let mut layout_cols_lower = Layout::default()
-                    //     .direction(Direction::Horizontal)
-                    //     .constraints(
-                    //         [
-                    //             Constraint::Percentage(25),
-                    //             Constraint::Percentage(25),
-                    //             Constraint::Percentage(25),
-                    //             Constraint::Percentage(25),
-                    //         ]
-                    //         .as_ref(),
-                    //     )
-                    //     .split(add_chunks[1]);
-
-                    // layout_cols.append(&mut layout_cols_lower);
-
                     for (ta, chunk) in text_areas.iter().zip(layout_cols) {
                         let widget = ta.text_area.widget();
                         rect.render_widget(widget, chunk);
@@ -265,57 +249,183 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         get_add_ok_text()
                     };
-                    // let home = Paragraph::new(vec![
-                    //     Spans::from(vec![Span::raw("")]),
-                    //     Spans::from(vec![Span::raw("Welcome")]),
-                    //     Spans::from(vec![Span::raw("")]),
-                    //     Spans::from(vec![Span::raw("to")]),
-                    //     Spans::from(vec![Span::raw("")]),
-                    //     Spans::from(vec![Span::styled(
-                    //         "EventItem-CLI",
-                    //         Style::default().fg(Color::LightBlue),
-                    //     )]),
-                    //     Spans::from(vec![Span::raw("")]),
-                    //     Spans::from(vec![Span::raw("Press 'Alt+e' to access events, 'Alt+a' to add instances and 'Alt+u' to update and 'Alt+d' to delete the currently selected EventItem.")]),
-                    // ])
-                    // .alignment(Alignment::Center)
-                    // .block(
-                    //     Block::default()
-                    //         .borders(Borders::ALL)
-                    //         .style(Style::default().fg(Color::White))
-                    //         .title("Home")
-                    //         .border_type(BorderType::Plain),
-                    // );
                     rect.render_widget(helper_text, cols[1]);
+
+
+                    // let block = Block::default().title("Popup").borders(Borders::ALL);
+                    // let area = centered_rect(60, 20, size);
+                    // // f.render_widget(Clear, size); //this clears out the background
+                    // rect.render_widget(block, size);
                 }
             }
             rect.render_widget(copyright, chunks[2]);
         })?;
 
-        if active_menu_item == MenuItem::Add {
-            match crossterm::event::read()?.into() {
-                Input {
-                    key: Key::Char('h'),
-                    alt: true,
-                    ..
-                } => active_menu_item = MenuItem::Home,
-                Input {
-                    key: Key::Char('e'),
-                    alt: true,
-                    ..
-                } => active_menu_item = MenuItem::Instances,
-                Input {
-                    key: Key::Char('q'),
-                    alt: true,
-                    ..
-                } => {
+        match rx.recv()? {
+            Event::Input(event) => match (event, active_menu_item, active_block) {
+                (
+                    KeyEvent {
+                        code: KeyCode::Char('q'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    },
+                    _,
+                    _,
+                ) => {
                     disable_raw_mode()?;
                     terminal.show_cursor()?;
                     break;
                 }
-                Input {
-                    key: Key::Enter, ..
-                } => {
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Char('h'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    },
+                    _,
+                    _,
+                ) => active_menu_item = MenuItem::Home,
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Char('e'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    },
+                    _,
+                    _,
+                ) => active_menu_item = MenuItem::Instances,
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Char('a'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    },
+                    _,
+                    _,
+                ) => active_menu_item = MenuItem::Add,
+                // KeyCode::Char('a') => {
+                //     add_random_pet_to_db().expect("can add new random EventItem");
+                // }
+                // KeyCode::Char('d') => {
+                //     remove_pet_at_index(&mut event_list_state).expect("can remove EventItem");
+                // }
+                (
+                    KeyEvent {
+                        code: KeyCode::Down,
+                        ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::EventBlock,
+                ) => {
+                    if let Some(selected) = event_list_state.selected() {
+                        let amount_events = read_events_from_db(&conn)
+                            .expect("can fetch EventItem list")
+                            .len();
+                        if selected >= amount_events - 1 {
+                            event_list_state.select(Some(0));
+                        } else {
+                            event_list_state.select(Some(selected + 1));
+                        }
+                    }
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Down,
+                        ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::InstanceBlock,
+                ) => {
+                    if let Some(selected) = instance_list_state.selected() {
+                        if selected >= instance_count - 1 {
+                            instance_list_state.select(Some(0));
+                        } else {
+                            instance_list_state.select(Some(selected + 1));
+                        }
+                    }
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Up, ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::EventBlock,
+                ) => {
+                    if let Some(selected) = event_list_state.selected() {
+                        let amount_events = read_events_from_db(&conn)
+                            .expect("can fetch EventItem list")
+                            .len();
+                        if selected > 0 {
+                            event_list_state.select(Some(selected - 1));
+                        } else {
+                            event_list_state.select(Some(amount_events - 1));
+                        }
+                    }
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Up, ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::InstanceBlock,
+                ) => {
+                    if let Some(selected) = instance_list_state.selected() {
+                        if selected > 0 {
+                            instance_list_state.select(Some(selected - 1));
+                        } else {
+                            instance_list_state.select(Some(instance_count - 1));
+                        }
+                    }
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Right,
+                        ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::EventBlock,
+                ) => {
+                    instance_count = read_instances_count_from_db(
+                        &conn,
+                        &events
+                            .get(event_list_state.selected().unwrap())
+                            .expect("Event list state error")
+                            .name,
+                    )
+                    .expect("Error in counting instances from DB of selected event");
+
+                    if instance_count > 0 {
+                        active_block = ActiveBlock::InstanceBlock;
+                        instance_list_state.select(Some(0));
+                    }
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Left,
+                        ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::InstanceBlock,
+                ) => {
+                    active_block = ActiveBlock::EventBlock;
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Enter,
+                        ..
+                    },
+                    MenuItem::Add,
+                    _,
+                ) => {
                     text_areas[which].inactivate();
                     which += 1;
                     if which > (text_areas.len() - 1) {
@@ -327,170 +437,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         text_areas[which].activate();
                     }
                 }
-                Input { key: Key::Esc, .. } => {
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Esc, ..
+                    },
+                    MenuItem::Add,
+                    _,
+                ) => {
                     text_areas[which].inactivate();
                     which = which.saturating_sub(1);
                     text_areas[which].activate();
                 }
-                input => {
+
+                (input, MenuItem::Add, _) => {
                     if text_areas[which].text_area.input(input) {
                         text_areas[which].validate();
                     }
                     add_given_ok = validate_text_areas(&text_areas);
                 }
-            }
-        } else {
-            match rx.recv()? {
-                Event::Input(event) => match event {
-                    KeyEvent {
-                        code: KeyCode::Char('q'),
-                        modifiers: KeyModifiers::ALT,
-                        ..
-                    } => {
-                        disable_raw_mode()?;
-                        terminal.show_cursor()?;
-                        break;
-                    }
-                    KeyEvent {
-                        code: KeyCode::Char('h'),
-                        modifiers: KeyModifiers::ALT,
-                        ..
-                    } => active_menu_item = MenuItem::Home,
-                    KeyEvent {
-                        code: KeyCode::Char('e'),
-                        modifiers: KeyModifiers::ALT,
-                        ..
-                    } => active_menu_item = MenuItem::Instances,
-                    KeyEvent {
-                        code: KeyCode::Char('a'),
-                        modifiers: KeyModifiers::ALT,
-                        ..
-                    } => active_menu_item = MenuItem::Add,
-                    // KeyCode::Char('a') => {
-                    //     add_random_pet_to_db().expect("can add new random EventItem");
-                    // }
-                    // KeyCode::Char('d') => {
-                    //     remove_pet_at_index(&mut event_list_state).expect("can remove EventItem");
-                    // }
-                    KeyEvent {
-                        code: KeyCode::Down,
-                        ..
-                    } => match active_block {
-                        ActiveBlock::EventBlock => {
-                            if let Some(selected) = event_list_state.selected() {
-                                let amount_events = read_events_from_db(&conn)
-                                    .expect("can fetch EventItem list")
-                                    .len();
-                                if selected >= amount_events - 1 {
-                                    event_list_state.select(Some(0));
-                                } else {
-                                    event_list_state.select(Some(selected + 1));
-                                }
-                            }
-                        }
-                        ActiveBlock::InstanceBlock => {
-                            if let Some(selected) = instance_list_state.selected() {
-                                if selected >= instance_count - 1 {
-                                    instance_list_state.select(Some(0));
-                                } else {
-                                    instance_list_state.select(Some(selected + 1));
-                                }
-                            }
-                        }
-                    },
-                    KeyEvent {
-                        code: KeyCode::Up, ..
-                    } => match active_block {
-                        ActiveBlock::EventBlock => {
-                            if let Some(selected) = event_list_state.selected() {
-                                let amount_events = read_events_from_db(&conn)
-                                    .expect("can fetch EventItem list")
-                                    .len();
-                                if selected > 0 {
-                                    event_list_state.select(Some(selected - 1));
-                                } else {
-                                    event_list_state.select(Some(amount_events - 1));
-                                }
-                            }
-                        }
-                        ActiveBlock::InstanceBlock => {
-                            if let Some(selected) = instance_list_state.selected() {
-                                if selected > 0 {
-                                    instance_list_state.select(Some(selected - 1));
-                                } else {
-                                    instance_list_state.select(Some(instance_count - 1));
-                                }
-                            }
-                        }
-                    },
-                    KeyEvent {
-                        code: KeyCode::Right,
-                        ..
-                    } => {
-                        instance_count = read_instances_count_from_db(
-                            &conn,
-                            &events
-                                .get(event_list_state.selected().unwrap())
-                                .expect("Event list state error")
-                                .name,
-                        )
-                        .expect("Error in counting instances from DB of selected event");
-
-                        if instance_count > 0 {
-                            active_block = ActiveBlock::InstanceBlock;
-                            instance_list_state.select(Some(0));
-                        }
-                    }
-                    KeyEvent {
-                        code: KeyCode::Left,
-                        ..
-                    } => {
-                        active_block = ActiveBlock::EventBlock;
-                    }
-                    _ => {}
-                },
-                Event::Tick => {}
-            }
+                _ => {}
+            },
+            Event::Tick => {}
         }
     }
-
     Ok(())
 }
-
-// fn add_random_pet_to_db() -> Result<Vec<EventItem>, Error> {
-//     let mut rng = rand::thread_rng();
-//     let db_content = fs::read_to_string(DB_PATH)?;
-//     let mut parsed: Vec<EventItem> = serde_json::from_str(&db_content)?;
-//     let catsdogs = match rng.gen_range(0, 1) {
-//         0 => "cats",
-//         _ => "dogs",
-//     };
-
-//     let random_pet = EventItem {
-//         id: rng.gen_range(0, 9999999),
-//         name: rng.sample_iter(Alphanumeric).take(10).collect(),
-//         category: catsdogs.to_owned(),
-//         age: rng.gen_range(1, 15),
-//         created_at: Utc::now(),
-//     };
-
-//     parsed.push(random_pet);
-//     fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
-//     Ok(parsed)
-// }
-
-// fn remove_pet_at_index(event_list_state: &mut ListState) -> Result<(), Error> {
-//     if let Some(selected) = event_list_state.selected() {
-//         let db_content = fs::read_to_string(DB_PATH)?;
-//         let mut parsed: Vec<EventItem> = serde_json::from_str(&db_content)?;
-//         parsed.remove(selected);
-//         fs::write(DB_PATH, &serde_json::to_vec(&parsed)?)?;
-//         let amount_events = read_db().expect("can fetch EventItem list").len();
-//         if selected > 0 {
-//             event_list_state.select(Some(selected - 1));
-//         } else {
-//             event_list_state.select(Some(0));
-//         }
-//     }
-//     Ok(())
-// }
