@@ -20,7 +20,7 @@ use tui::{
 };
 use tui_textarea::{Input, Key};
 mod add;
-use add::get_text_areas;
+use add::{get_add_err_text, get_add_ok_text, get_text_areas, validate_text_areas};
 
 mod db;
 use db::*;
@@ -97,40 +97,6 @@ impl From<MenuItem> for usize {
     }
 }
 
-// fn validate_num<T, E>(text_area: &mut TextArea) -> bool
-// where
-//     T: FromStr<Err = E>,
-//     E: std::fmt::Display,
-// {
-//     let title = text_area.block().unwrap().title(title)
-//     if let Err(err) = text_area.lines()[0].parse::<T>() {
-//         text_area.set_style(Style::default().fg(Color::LightRed));
-//         text_area.set_block(
-//             Block::default()
-//                 .borders(Borders::ALL)
-//                 .title(format!("ERROR: {}", err)),
-//         );
-//         false
-//     } else {
-//         text_area.set_style(Style::default().fg(Color::LightGreen));
-//         text_area.set_block(Block::default().borders(Borders::ALL).title("OK"));
-//         true
-//     }
-// }
-
-// fn reset_text_area(text_area: &mut TextArea) {
-
-//     text_area.set_style(Style::default().fg(Color::LightRed));
-//     text_area.set_block(
-//         Block::default()
-//             .borders(Borders::ALL)
-//             .title(format!("ERROR: {}", err)),
-
-//     text_area.set_style(Style::default().fg(Color::LightGreen));
-//     text_area.set_block(Block::default().borders(Borders::ALL).title("OK"));
-
-// }
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let conn = get_db_connection();
     enable_raw_mode().expect("can run in raw mode");
@@ -179,6 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let layout_rows = Layout::default()
     //     .direction(Direction::Vertical)
     //     .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref());
+    let mut add_given_ok = false;
 
     let mut which: usize = 0;
 
@@ -293,29 +260,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let widget = ta.text_area.widget();
                         rect.render_widget(widget, chunk);
                     }
-
-                    let home = Paragraph::new(vec![
-                        Spans::from(vec![Span::raw("")]),
-                        Spans::from(vec![Span::raw("Welcome")]),
-                        Spans::from(vec![Span::raw("")]),
-                        Spans::from(vec![Span::raw("to")]),
-                        Spans::from(vec![Span::raw("")]),
-                        Spans::from(vec![Span::styled(
-                            "EventItem-CLI",
-                            Style::default().fg(Color::LightBlue),
-                        )]),
-                        Spans::from(vec![Span::raw("")]),
-                        Spans::from(vec![Span::raw("Press 'Alt+e' to access events, 'Alt+a' to add instances and 'Alt+u' to update and 'Alt+d' to delete the currently selected EventItem.")]),
-                    ])
-                    .alignment(Alignment::Center)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .style(Style::default().fg(Color::White))
-                            .title("Home")
-                            .border_type(BorderType::Plain),
-                    );
-                    rect.render_widget(home, cols[1]);
+                    let helper_text = if !add_given_ok {
+                        get_add_err_text()
+                    } else {
+                        get_add_ok_text()
+                    };
+                    // let home = Paragraph::new(vec![
+                    //     Spans::from(vec![Span::raw("")]),
+                    //     Spans::from(vec![Span::raw("Welcome")]),
+                    //     Spans::from(vec![Span::raw("")]),
+                    //     Spans::from(vec![Span::raw("to")]),
+                    //     Spans::from(vec![Span::raw("")]),
+                    //     Spans::from(vec![Span::styled(
+                    //         "EventItem-CLI",
+                    //         Style::default().fg(Color::LightBlue),
+                    //     )]),
+                    //     Spans::from(vec![Span::raw("")]),
+                    //     Spans::from(vec![Span::raw("Press 'Alt+e' to access events, 'Alt+a' to add instances and 'Alt+u' to update and 'Alt+d' to delete the currently selected EventItem.")]),
+                    // ])
+                    // .alignment(Alignment::Center)
+                    // .block(
+                    //     Block::default()
+                    //         .borders(Borders::ALL)
+                    //         .style(Style::default().fg(Color::White))
+                    //         .title("Home")
+                    //         .border_type(BorderType::Plain),
+                    // );
+                    rect.render_widget(helper_text, cols[1]);
                 }
             }
             rect.render_widget(copyright, chunks[2]);
@@ -349,8 +320,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     which += 1;
                     if which > (text_areas.len() - 1) {
                         which -= 1;
-                        insert_into_db(&conn, &text_areas)?;
-                        // TODO popup here
+                        if add_given_ok {
+                            insert_into_db(&conn, &text_areas)?;
+                        }
                     } else {
                         text_areas[which].activate();
                     }
@@ -362,8 +334,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 input => {
                     if text_areas[which].text_area.input(input) {
-                        // is_valid = validate(&mut text_areas[which], which);
+                        text_areas[which].validate();
                     }
+                    add_given_ok = validate_text_areas(&text_areas);
                 }
             }
         } else {

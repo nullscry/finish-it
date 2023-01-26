@@ -1,14 +1,34 @@
 use tui_textarea::TextArea;
 
-use tui::style::{Color, Modifier, Style};
-use tui::widgets::{Block, Borders};
+use tui::{
+    layout::Alignment,
+    style::{Color, Modifier, Style},
+    text::{Span, Spans},
+    widgets::{Block, BorderType, Borders, Paragraph},
+};
+pub enum AreaType {
+    UIntArea,
+    FloatArea,
+    BoolArea,
+    StringArea,
+}
+
 pub struct TextAreaContainer<'a> {
     pub text_area: TextArea<'a>,
     pub title: String,
-    // validator: Fn
+    ok: bool,
+    area_type: AreaType,
 }
 
 impl TextAreaContainer<'_> {
+    pub fn new(title: String, area_type: AreaType) -> Self {
+        Self {
+            text_area: TextArea::default(),
+            title,
+            ok: false,
+            area_type,
+        }
+    }
     pub fn initialize_title(&mut self) {
         let b = self
             .text_area
@@ -43,38 +63,100 @@ impl TextAreaContainer<'_> {
             .unwrap_or_else(|| Block::default().borders(Borders::ALL));
         self.text_area.set_block(b.style(Style::default()));
     }
+
+    fn set_border_error(&mut self) {
+        self.text_area
+            .set_style(Style::default().fg(Color::LightRed));
+    }
+
+    fn set_border_ok(&mut self) {
+        self.text_area
+            .set_style(Style::default().fg(Color::LightGreen));
+    }
+
+    pub fn validate(&mut self) {
+        self.ok = match self.area_type {
+            AreaType::UIntArea => self.validate_value_uint(),
+            AreaType::FloatArea => self.validate_value_float(),
+            AreaType::BoolArea => self.validate_value_bool(),
+            AreaType::StringArea => self.validate_value_string(),
+        }
+    }
+
+    fn validate_value_string(&mut self) -> bool {
+        if self.text_area.lines()[0].trim().len() > 0 {
+            self.set_border_ok();
+            true
+        } else {
+            self.set_border_error();
+            false
+        }
+    }
+
+    fn validate_value_float(&mut self) -> bool {
+        match self.text_area.lines()[0].parse::<f64>() {
+            Ok(x) => {
+                if x >= 0.0 && x <= 100.0 {
+                    self.set_border_ok();
+                    true
+                } else {
+                    self.set_border_error();
+                    false
+                }
+            }
+            Err(_) => {
+                self.set_border_error();
+                false
+            }
+        }
+    }
+
+    fn validate_value_uint(&mut self) -> bool {
+        match self.text_area.lines()[0].parse::<usize>() {
+            Ok(_) => {
+                self.set_border_ok();
+                true
+            }
+            Err(_) => {
+                self.set_border_error();
+                false
+            }
+        }
+    }
+
+    fn validate_value_bool(&mut self) -> bool {
+        match self.text_area.lines()[0].parse::<usize>() {
+            Ok(x) => match x {
+                0..=1 => {
+                    self.set_border_ok();
+                    true
+                }
+                _ => {
+                    self.set_border_error();
+                    false
+                }
+            },
+            Err(_) => {
+                self.set_border_error();
+                false
+            }
+        }
+    }
+
+    pub fn is_ok(&self) -> u8 {
+        self.ok as u8
+    }
 }
 
 pub fn get_text_areas() -> [TextAreaContainer<'static>; 7] {
     let mut text_areas = [
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Event Name".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Instance Name".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Is Recurring?".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Is Finished?".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "% Completed".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "# Completed".to_string(),
-        },
-        TextAreaContainer {
-            text_area: TextArea::default(),
-            title: "Remaining Days".to_string(),
-        },
+        TextAreaContainer::new("Event Name".to_string(), AreaType::StringArea),
+        TextAreaContainer::new("Instance Name".to_string(), AreaType::StringArea),
+        TextAreaContainer::new("Is Recurring? (0 OR 1)".to_string(), AreaType::BoolArea),
+        TextAreaContainer::new("Is Finished? (0 OR 1)".to_string(), AreaType::BoolArea),
+        TextAreaContainer::new("% Completed [0.0, 100.0]".to_string(), AreaType::FloatArea),
+        TextAreaContainer::new("# Completed [0, ...]".to_string(), AreaType::UIntArea),
+        TextAreaContainer::new("Day Limit [0, ...]".to_string(), AreaType::UIntArea),
     ];
 
     for ta in text_areas.iter_mut() {
@@ -87,4 +169,69 @@ pub fn get_text_areas() -> [TextAreaContainer<'static>; 7] {
     }
 
     text_areas
+}
+
+pub fn validate_text_areas(text_areas: &[TextAreaContainer<'static>; 7]) -> bool {
+    let ok_sum = text_areas
+        .iter()
+        .map(TextAreaContainer::is_ok)
+        .collect::<Vec<u8>>()
+        .iter()
+        .sum::<u8>();
+
+    if ok_sum == text_areas.len() as u8 {
+        true
+    } else {
+        false
+    }
+}
+
+pub fn get_add_err_text() -> Paragraph<'static> {
+    let err_text = vec![
+        Spans::from(vec![Span::raw("Fill out the form to the left")]),
+        Spans::from(vec![Span::raw("until all the text in the boxes turns green, including this one.")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("Type out your desired new Instance as laid out by the boxes.")]),
+        Spans::from(vec![Span::raw("Event and Instance cannot be blank.")]),
+        Spans::from(vec![Span::raw("The rest all show which values are allowed next to their names.")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("Press Enter key when you are done with a box to move on to the next one.")]),
+        Spans::from(vec![Span::raw("Press Esc key to go back one box")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("When everything is green and you are given the ok, press Enter key at the last box to add your new instance!")]),
+    ];
+    let err_color = Color::LightRed;
+
+    Paragraph::new(err_text).alignment(Alignment::Center).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .style(Style::default().fg(err_color))
+            .title("Instructions")
+            .border_type(BorderType::Plain),
+    )
+}
+
+pub fn get_add_ok_text() -> Paragraph<'static> {
+    let ok_text = vec![
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("Everything is in order!")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("Confirm your instance my pressing Enter key when the last box is selected.")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("You can see your new addition by going back to the Events screen with Alt+e after adding it.")]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("")]),
+    ];
+    let ok_color = Color::LightGreen;
+
+    Paragraph::new(ok_text).alignment(Alignment::Center).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .style(Style::default().fg(ok_color))
+            .title("Instructions")
+            .border_type(BorderType::Plain),
+    )
 }
