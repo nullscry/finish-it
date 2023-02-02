@@ -4,10 +4,14 @@ use tui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, BorderType, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table},
+    widgets::{
+        Block, BorderType, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table,
+        TableState,
+    },
 };
 
 use super::db::{read_events_from_db, read_instances_from_db};
+use super::InstanceItem;
 use crate::ActiveBlock;
 
 pub fn render_home<'a>() -> Paragraph<'a> {
@@ -37,9 +41,10 @@ pub fn render_home<'a>() -> Paragraph<'a> {
 
 pub fn render_events<'a>(
     event_list_state: &ListState,
+    instance_list_state: &TableState,
     conn: &Connection,
     active_block: &ActiveBlock,
-) -> (List<'a>, Table<'a>) {
+) -> (List<'a>, InstanceItem, Table<'a>) {
     let (list_highlight, table_highlight) = match active_block {
         ActiveBlock::EventBlock => (Color::Red, Color::Yellow),
         ActiveBlock::InstanceBlock => (Color::Yellow, Color::Red),
@@ -80,6 +85,14 @@ pub fn render_events<'a>(
 
     let instance_list =
         read_instances_from_db(conn, &selected_event.name).expect("can fetch EventItem list");
+
+    let selected_instance = match instance_list_state.selected() {
+        Some(i) => match instance_list.get(i) {
+            Some(inst) => inst.to_owned(),
+            None => InstanceItem::default(),
+        },
+        None => InstanceItem::default(),
+    };
 
     let mut rows: Vec<Row<'a>> = Vec::new();
     for instance in instance_list {
@@ -169,10 +182,10 @@ pub fn render_events<'a>(
     //     .expect("exists")
     //     .clone();
 
-    (list, instance_detail)
+    (list, selected_instance, instance_detail)
 }
 
-fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints(

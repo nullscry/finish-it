@@ -185,16 +185,29 @@ pub fn validate_text_areas(text_areas: &[TextAreaContainer<'static>; 7]) -> bool
 pub fn get_add_err_text() -> Paragraph<'static> {
     let err_text = vec![
         Spans::from(vec![Span::raw("Fill out the form to the left")]),
-        Spans::from(vec![Span::raw("until all the text in the boxes turns green, including this one.")]),
+        Spans::from(vec![Span::raw(
+            "until all the text in the boxes turns green, including this one.",
+        )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Type out your desired new Instance as laid out by the boxes.")]),
+        Spans::from(vec![Span::raw(
+            "Type out your desired new Instance as laid out by the boxes.",
+        )]),
         Spans::from(vec![Span::raw("Event and Instance cannot be blank.")]),
-        Spans::from(vec![Span::raw("The rest all show which values are allowed next to their names.")]),
+        Spans::from(vec![Span::raw(
+            "The rest all show which values are allowed next to their names.",
+        )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press Enter key when you are done with a box to move on to the next one.")]),
+        Spans::from(vec![Span::raw(
+            "Press Enter key when you are done with a box to move on to the next one.",
+        )]),
         Spans::from(vec![Span::raw("Press Esc key to go back one box")]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("When everything is green and you are given the ok, press Enter key at the last box to add your new instance!")]),
+        Spans::from(vec![Span::raw(
+            "When everything is green and you are given the ok, ",
+        )]),
+        Spans::from(vec![Span::raw(
+            "press Enter key at the last box to add your new instance!",
+        )]),
     ];
     let err_color = Color::LightRed;
 
