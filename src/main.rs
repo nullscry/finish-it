@@ -8,7 +8,6 @@ use std::io;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use thiserror::Error;
 
 use tui::{
     backend::CrosstermBackend,
@@ -73,20 +72,6 @@ impl InstanceItem {
         [filled, remaining].concat()
     }
 
-    pub fn default() -> Self {
-        InstanceItem {
-            instanceid: 0,
-            name: "".to_string(),
-            eventtype: "".to_string(),
-            isrecurring: 0,
-            isfinished: 0,
-            percentage: 0.0,
-            timesfinished: 0,
-            daylimit: 0,
-            created: chrono::offset::Utc::now(),
-        }
-    }
-
     fn increment_default(&mut self) {
         if self.percentage + 0.5 <= 100.0 {
             self.percentage += 0.5;
@@ -98,7 +83,7 @@ impl InstanceItem {
             self.percentage -= 0.5;
         }
     }
-
+    #[allow(dead_code)]
     fn increment_with_value(&mut self, amount: f64) {
         if self.percentage + amount <= 100.0 {
             self.percentage += amount;
@@ -106,7 +91,7 @@ impl InstanceItem {
             self.percentage = 100.0;
         }
     }
-
+    #[allow(dead_code)]
     fn decrement_with_value(&mut self, amount: f64) {
         if self.percentage - amount >= 0.0 {
             self.percentage -= amount;
@@ -145,6 +130,22 @@ impl InstanceItem {
                     .border_type(BorderType::Plain),
             );
         block
+    }
+}
+
+impl Default for InstanceItem {
+    fn default() -> Self {
+        InstanceItem {
+            instanceid: 0,
+            name: "".to_string(),
+            eventtype: "".to_string(),
+            isrecurring: 0,
+            isfinished: 0,
+            percentage: 0.0,
+            timesfinished: 0,
+            daylimit: 0,
+            created: chrono::offset::Utc::now(),
+        }
     }
 }
 

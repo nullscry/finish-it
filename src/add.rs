@@ -227,7 +227,7 @@ pub fn get_add_ok_text() -> Paragraph<'static> {
         Spans::from(vec![Span::raw("Everything is in order!")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Confirm your instance my pressing Enter key when the last box is selected.")]),
+        Spans::from(vec![Span::raw("Confirm your instance by pressing the Enter key when the last box is selected.")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw("You can see your new addition by going back to the Events screen with Alt+e after adding it.")]),

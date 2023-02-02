@@ -8,8 +8,7 @@ pub fn get_db_connection() -> Connection {
 
     if !path::Path::exists(db_path) {
         panic!(
-            "Problem opening the file: {0:?}\nExecute \"fitdb create\" to initialize database at {0:?}",
-            db_path
+            "Problem opening the file: {db_path:?}\nExecute \"fitdb create\" to initialize database at {db_path:?}"
         );
     }
 
@@ -38,11 +37,7 @@ pub fn read_instances_count_from_db(
     selected_event: &str,
 ) -> Result<usize, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        format!(
-            "SELECT COUNT(*) FROM instances WHERE eventtype = \"{}\"",
-            selected_event
-        )
-        .as_str(),
+        format!("SELECT COUNT(*) FROM instances WHERE eventtype = \"{selected_event}\"").as_str(),
     )?;
     let mut rows = (stmt.query([]))?;
 
@@ -56,13 +51,8 @@ pub fn read_instances_from_db(
     conn: &Connection,
     event_name: &str,
 ) -> Result<Vec<InstanceItem>, rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        format!(
-            "SELECT * FROM instances WHERE eventtype = \"{}\"",
-            event_name
-        )
-        .as_str(),
-    )?;
+    let mut stmt = conn
+        .prepare(format!("SELECT * FROM instances WHERE eventtype = \"{event_name}\"").as_str())?;
     let instance_iter = stmt.query_map([], |row| {
         Ok(InstanceItem {
             instanceid: row.get(0)?,
