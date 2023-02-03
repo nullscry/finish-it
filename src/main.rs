@@ -19,7 +19,9 @@ use tui::{
 };
 
 mod add;
-use add::{get_add_err_text, get_add_ok_text, get_text_areas, validate_text_areas};
+use add::{
+    get_add_err_text, get_add_ok_text, get_text_areas, validate_text_areas, TextAreaContainer,
+};
 
 mod db;
 use db::*;
@@ -42,10 +44,33 @@ pub enum ActivePopUp {
     None,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct EventItem {
     name: String,
     created: DateTime<Utc>,
+}
+
+impl EventItem {
+    fn as_delete_paragraph(&self) -> Paragraph {
+        let text = vec![
+            Spans::from(
+                vec![Span::raw(format!("Are you sure you want to DELETE Event {} and ALL INSTANCES belonging to this Event", self.name.to_owned()))],
+            ),
+            Spans::from(vec![Span::raw("Hit Enter to Confirm or Esc to cancel")]),
+        ];
+
+        let block = Paragraph::new(text)
+            .style(Style::default().fg(Color::LightCyan))
+            .alignment(Alignment::Center)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .style(Style::default().fg(Color::White))
+                    .title("Modifying")
+                    .border_type(BorderType::Plain),
+            );
+        block
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -54,8 +79,7 @@ pub struct InstanceItem {
     name: String,
     eventtype: String,
     isrecurring: u8,
-    isfinished: u8,
-    percentage: f64,
+    percentage: u8,
     timesfinished: usize,
     daylimit: usize,
     created: DateTime<Utc>,
@@ -72,35 +96,65 @@ impl InstanceItem {
         [filled, remaining].concat()
     }
 
-    fn increment_default(&mut self) {
-        if self.percentage + 0.5 <= 100.0 {
-            self.percentage += 0.5;
-        }
+    fn increment_one(&mut self) {
+        match self.isrecurring {
+            0 => {
+                if self.percentage + 1 < 100 {
+                    self.percentage += 1;
+                } else {
+                    self.percentage = 100;
+                    self.timesfinished = 1;
+                }
+            }
+            1 => {
+                if self.percentage + 1 <= 100 {
+                    self.percentage += 1;
+                } else {
+                    self.percentage = 1;
+                    self.timesfinished += 1;
+                }
+            }
+            _ => {}
+        };
     }
 
-    fn decrement_default(&mut self) {
-        if self.percentage - 0.5 >= 0.0 {
-            self.percentage -= 0.5;
-        }
-    }
-    #[allow(dead_code)]
-    fn increment_with_value(&mut self, amount: f64) {
-        if self.percentage + amount <= 100.0 {
-            self.percentage += amount;
-        } else {
-            self.percentage = 100.0;
-        }
-    }
-    #[allow(dead_code)]
-    fn decrement_with_value(&mut self, amount: f64) {
-        if self.percentage - amount >= 0.0 {
-            self.percentage -= amount;
-        } else {
-            self.percentage = 0.0;
-        }
+    fn decrement_one(&mut self) {
+        match self.isrecurring {
+            0 => {
+                self.percentage = self.percentage.saturating_sub(1);
+                if self.percentage < 100 {
+                    self.timesfinished = 0;
+                }
+            }
+            1 => match self.timesfinished {
+                0 => self.percentage = self.percentage.saturating_sub(1),
+                _ => match self.percentage.checked_sub(1) {
+                    Some(n) => self.percentage = n,
+                    None => {
+                        self.percentage = 100;
+                        self.timesfinished -= 1;
+                    }
+                },
+            },
+            _ => {}
+        };
     }
 
-    fn as_paragraph(&self) -> Paragraph {
+    fn finish_once(&mut self) {
+        match self.isrecurring {
+            0 => {
+                self.percentage = 100;
+                self.timesfinished = 1;
+            }
+            1 => {
+                self.percentage = 0;
+                self.timesfinished += 1;
+            }
+            _ => {}
+        };
+    }
+
+    fn as_update_paragraph(&self) -> Paragraph {
         let text = vec![
             Spans::from(vec![Span::raw(self.eventtype.to_owned())]),
             Spans::from(vec![Span::raw(self.name.to_owned())]),
@@ -110,13 +164,36 @@ impl InstanceItem {
                 self.get_dot_vec(),
                 self.percentage
             ))]),
-            Spans::from(vec![Span::raw("")]),
+            Spans::from(vec![Span::raw(format!(
+                "Is Recurring? = {}  Times Finished = {}",
+                self.isrecurring, self.timesfinished
+            ))]),
             Spans::from(vec![Span::raw(
                 "Change Progress with <- and -> Arrow Keys.",
             )]),
             Spans::from(vec![Span::raw(
                 "Press Enter to Update The Progress. Press Esc to Cancel.",
             )]),
+        ];
+
+        let block = Paragraph::new(text)
+            .style(Style::default().fg(Color::LightCyan))
+            .alignment(Alignment::Center)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .style(Style::default().fg(Color::White))
+                    .title("Modifying")
+                    .border_type(BorderType::Plain),
+            );
+        block
+    }
+
+    fn as_delete_paragraph(&self) -> Paragraph {
+        let text = vec![
+            Spans::from(vec![Span::raw("Are you sure you want to DELETE:")]),
+            Spans::from(vec![Span::raw(self.name.to_owned())]),
+            Spans::from(vec![Span::raw("Hit Enter to Confirm or Esc to cancel")]),
         ];
 
         let block = Paragraph::new(text)
@@ -140,8 +217,7 @@ impl Default for InstanceItem {
             name: "".to_string(),
             eventtype: "".to_string(),
             isrecurring: 0,
-            isfinished: 0,
-            percentage: 0.0,
+            percentage: 0,
             timesfinished: 0,
             daylimit: 0,
             created: chrono::offset::Utc::now(),
@@ -215,14 +291,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut active_block = ActiveBlock::EventBlock;
 
     let mut event_list_state = ListState::default();
-    event_list_state.select(Some(0));
+    event_list_state.select(None);
 
     let mut instance_list_state = TableState::default();
     instance_list_state.select(Some(0));
 
     let mut instance_count = 0;
 
-    let events = read_events_from_db(&conn).expect("can fetch EventItem list");
+    let mut events = read_events_from_db(&conn).expect("can fetch EventItem list");
 
     let mut text_areas = get_text_areas();
 
@@ -233,6 +309,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut active_popup = ActivePopUp::None;
     // let mut progress_amount: f64 = 0.0;
     let mut selected_instance = InstanceItem::default();
+    let mut selected_event = EventItem::default();
 
     loop {
         terminal.draw(|rect| {
@@ -296,31 +373,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             [Constraint::Percentage(20), Constraint::Percentage(80)].as_ref(),
                         )
                         .split(chunks[1]);
-                    let (left, selected_instance_, right) = render_events(&event_list_state, &instance_list_state, &conn, &active_block);
+                    let (left, selected_instance_, selected_event_, right) = render_events(&event_list_state, &instance_list_state, &conn, &active_block);
 
                     rect.render_stateful_widget(left, event_chunks[0], &mut event_list_state);
                     rect.render_stateful_widget(right, event_chunks[1], &mut instance_list_state);
-                    match active_popup {
-                        ActivePopUp::Update => {
-                            // Block::default().title("Update").borders(Borders::ALL);
-                            // selected_instance = selected_instance_copy;
-                            // selected_instance = &instance_list[instance_list_state.selected().unwrap()];
-                            let block = selected_instance.as_paragraph();
+                    match (active_block, active_popup) {
+                        (ActiveBlock::InstanceBlock, ActivePopUp::Update) => {
+                            let block = selected_instance.as_update_paragraph();
 
                             let area = centered_rect(60, 20, size);
-                            rect.render_widget(Clear, area); //this clears out the background
+                            rect.render_widget(Clear, area);
                             rect.render_widget(block, area);
                         }
 
-                        ActivePopUp::Delete => {
-                            let block = Block::default().title("Delete").borders(Borders::ALL);
+                        (ActiveBlock::InstanceBlock, ActivePopUp::Delete) => {
+                            let block = selected_instance.as_delete_paragraph();
                             let area = centered_rect(60, 20, size);
-                            rect.render_widget(Clear, area); //this clears out the background
+                            rect.render_widget(Clear, area);
                             rect.render_widget(block, area);
                         }
 
-                        ActivePopUp::None => {
+                        (ActiveBlock::EventBlock, ActivePopUp::Delete) => {
+                            let block = selected_event.as_delete_paragraph();
+                            let area = centered_rect(60, 20, size);
+                            rect.render_widget(Clear, area);
+                            rect.render_widget(block, area);
+                        }
+
+                        (ActiveBlock::EventBlock, ActivePopUp::Update) => {}
+
+
+                        (_, ActivePopUp::None) => {
                             selected_instance = selected_instance_;
+                            selected_event = selected_event_;
                         }
                     }
                     // let block = Block::default().title("Popup").borders(Borders::ALL);
@@ -343,13 +428,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .direction(Direction::Vertical)
                         .constraints(
                             [
+                                Constraint::Percentage(20),
+                                Constraint::Percentage(20),
                                 Constraint::Percentage(15),
                                 Constraint::Percentage(15),
-                                Constraint::Percentage(14),
-                                Constraint::Percentage(14),
-                                Constraint::Percentage(14),
-                                Constraint::Percentage(14),
-                                Constraint::Percentage(14),
+                                Constraint::Percentage(15),
+                                Constraint::Percentage(15),
                             ]
                             .as_ref(),
                         )
@@ -442,16 +526,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::EventBlock,
                     ActivePopUp::None,
                 ) => {
-                    if let Some(selected) = event_list_state.selected() {
-                        let amount_events = read_events_from_db(&conn)
-                            .expect("can fetch EventItem list")
-                            .len();
-                        if selected >= amount_events - 1 {
-                            event_list_state.select(Some(0));
-                        } else {
-                            event_list_state.select(Some(selected + 1));
+                    match read_events_from_db(&conn) {
+                        Ok(e) => {
+                            if !e.is_empty() {
+                                let selected = match event_list_state.selected() {
+                                    Some(s) => s,
+                                    None => 0,
+                                };
+                                if selected >= e.len() - 1 {
+                                    event_list_state.select(Some(0));
+                                } else {
+                                    event_list_state.select(Some(selected + 1));
+                                }
+                            }
                         }
+                        Err(_) => {}
                     }
+
+                    // let amount_events = read_events_from_db(&conn)
+                    //     .expect("can fetch EventItem list")
+                    //     .len();
+                    // if selected >= amount_events - 1 {
+                    //     event_list_state.select(Some(0));
+                    // } else {
+                    //     event_list_state.select(Some(selected + 1));
+                    // }
                 }
 
                 (
@@ -462,15 +561,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::EventBlock,
                     ActivePopUp::None,
                 ) => {
-                    if let Some(selected) = event_list_state.selected() {
-                        let amount_events = read_events_from_db(&conn)
-                            .expect("can fetch EventItem list")
-                            .len();
-                        if selected > 0 {
-                            event_list_state.select(Some(selected - 1));
-                        } else {
-                            event_list_state.select(Some(amount_events - 1));
+                    // if let Some(selected) = event_list_state.selected() {
+                    //     match read_events_from_db(&conn) {
+                    //         Ok(e) => {
+                    //             if e.len() > 0 {
+                    //                 let amount_events = e.len();
+                    //                 if selected > 0 {
+                    //                     event_list_state.select(Some(selected - 1));
+                    //                 } else {
+                    //                     event_list_state.select(Some(amount_events - 1));
+                    //                 }
+                    //             }
+                    //         }
+                    //         Err(_) => {}
+                    //     }
+
+                    //     // let amount_events = read_events_from_db(&conn)
+                    //     //     .expect("can fetch EventItem list")
+                    //     //     .len();
+                    //     // if selected > 0 {
+                    //     //     event_list_state.select(Some(selected - 1));
+                    //     // } else {
+                    //     //     event_list_state.select(Some(amount_events - 1));
+                    //     // }
+                    // }
+                    match read_events_from_db(&conn) {
+                        Ok(e) => {
+                            if !e.is_empty() {
+                                let selected = match event_list_state.selected() {
+                                    Some(s) => s,
+                                    None => 0,
+                                };
+                                if selected > 0 {
+                                    event_list_state.select(Some(selected - 1));
+                                } else {
+                                    event_list_state.select(Some(e.len() - 1));
+                                }
+                            }
                         }
+                        Err(_) => {}
                     }
                 }
 
@@ -483,20 +612,76 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::EventBlock,
                     ActivePopUp::None,
                 ) => {
-                    instance_count = read_instances_count_from_db(
-                        &conn,
-                        &events
-                            .get(event_list_state.selected().unwrap())
-                            .expect("Event list state error")
-                            .name,
-                    )
-                    .expect("Error in counting instances from DB of selected event");
-
-                    if instance_count > 0 {
-                        active_block = ActiveBlock::InstanceBlock;
-                        instance_list_state.select(Some(0));
+                    match read_events_from_db(&conn) {
+                        Ok(e) => {
+                            if !e.is_empty() {
+                                match e.get(event_list_state.selected().unwrap_or(0)) {
+                                    Some(sel_event) => {
+                                        instance_count =
+                                            read_instances_count_from_db(&conn, &sel_event.name)?;
+                                        if instance_count > 0 {
+                                            active_block = ActiveBlock::InstanceBlock;
+                                            instance_list_state.select(Some(0));
+                                        }
+                                    }
+                                    None => {}
+                                }
+                            }
+                        }
+                        Err(_) => {}
                     }
+
+                    // instance_count = match read_instances_count_from_db(
+                    //     &conn,
+                    //     &events
+                    //         .get(event_list_state.selected().unwrap_or(0))
+                    //         .expect("Event list state error")
+                    //         .name,
+                    // ) {
+                    //     Ok(n) => n,
+                    //     Err(_) => 0,
+                    // };
+
+                    // if instance_count > 0 {
+                    //     active_block = ActiveBlock::InstanceBlock;
+                    //     instance_list_state.select(Some(0));
+                    // }
                 }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Char('d'),
+                        modifiers: KeyModifiers::ALT,
+                        ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::EventBlock,
+                    ActivePopUp::None,
+                ) => {
+                    active_popup = ActivePopUp::Delete;
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Enter,
+                        ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::EventBlock,
+                    ActivePopUp::Delete,
+                ) => {
+                    delete_event(&conn, &selected_event)?;
+                    active_popup = ActivePopUp::None;
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Esc, ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::EventBlock,
+                    ActivePopUp::Delete,
+                ) => {}
 
                 // Instances - Instance Block Keys
                 (
@@ -509,10 +694,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActivePopUp::None,
                 ) => {
                     if let Some(selected) = instance_list_state.selected() {
-                        if selected >= instance_count - 1 {
-                            instance_list_state.select(Some(0));
-                        } else {
-                            instance_list_state.select(Some(selected + 1));
+                        if instance_count > 0 {
+                            if selected >= instance_count - 1 {
+                                instance_list_state.select(Some(0));
+                            } else {
+                                instance_list_state.select(Some(selected + 1));
+                            }
                         }
                     }
                 }
@@ -526,10 +713,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActivePopUp::None,
                 ) => {
                     if let Some(selected) = instance_list_state.selected() {
-                        if selected > 0 {
-                            instance_list_state.select(Some(selected - 1));
-                        } else {
-                            instance_list_state.select(Some(instance_count - 1));
+                        if instance_count > 0 {
+                            if selected > 0 {
+                                instance_list_state.select(Some(selected - 1));
+                            } else {
+                                instance_list_state.select(Some(instance_count - 1));
+                            }
                         }
                     }
                 }
@@ -544,6 +733,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActivePopUp::None,
                 ) => {
                     active_block = ActiveBlock::EventBlock;
+                    let selected = match event_list_state.selected() {
+                        Some(s) => s,
+                        None => 0,
+                    };
+                    event_list_state.select(Some(selected));
                 }
 
                 (
@@ -571,6 +765,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     active_popup = ActivePopUp::Delete;
                 }
 
+                // Update Popup
                 (
                     KeyEvent {
                         code: KeyCode::Right,
@@ -580,7 +775,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::Update,
                 ) => {
-                    selected_instance.increment_default();
+                    selected_instance.increment_one();
                 }
 
                 (
@@ -592,7 +787,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::Update,
                 ) => {
-                    selected_instance.decrement_default();
+                    selected_instance.decrement_one();
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Tab, ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::InstanceBlock,
+                    ActivePopUp::Update,
+                ) => {
+                    selected_instance.finish_once();
+                }
+
+                (
+                    KeyEvent {
+                        code: KeyCode::Enter,
+                        ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::InstanceBlock,
+                    ActivePopUp::Update,
+                ) => {
+                    update_instance(&conn, &selected_instance)?;
+                    active_popup = ActivePopUp::None;
+                }
+
+                // Delete Popup
+                (
+                    KeyEvent {
+                        code: KeyCode::Enter,
+                        ..
+                    },
+                    MenuItem::Instances,
+                    ActiveBlock::InstanceBlock,
+                    ActivePopUp::Delete,
+                ) => {
+                    delete_instance(&conn, &selected_instance)?;
+                    active_popup = ActivePopUp::None;
                 }
 
                 // Instances - For Both Popups
@@ -617,14 +850,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _,
                     ActivePopUp::None,
                 ) => {
-                    text_areas[which].inactivate();
-                    which += 1;
-                    if which > (text_areas.len() - 1) {
-                        which -= 1;
+                    // text_areas[which].inactivate();
+                    // which += 1;
+                    if which + 1 >= text_areas.len() {
+                        // which -= 1;
                         if add_given_ok {
-                            insert_into_db(&conn, &text_areas)?;
+                            insert_into_db(&conn, &mut text_areas)?;
+                            add_given_ok = validate_text_areas(&text_areas);
+                            which = 0;
                         }
                     } else {
+                        text_areas[which].inactivate();
+                        which += 1;
                         text_areas[which].activate();
                     }
                 }

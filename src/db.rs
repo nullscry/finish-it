@@ -59,12 +59,10 @@ pub fn read_instances_from_db(
             name: row.get(1)?,
             eventtype: row.get(2)?,
             isrecurring: row.get(3)?,
-            isfinished: row.get(4)?,
-            percentage: row.get(5)?,
-            timesfinished: row.get(6)?,
-            daylimit: row.get(7)?,
-            // lastfinished: row.get(8)?,
-            created: row.get(8)?,
+            percentage: row.get(4)?,
+            timesfinished: row.get(5)?,
+            daylimit: row.get(6)?,
+            created: row.get(7)?,
         })
     })?;
 
@@ -78,7 +76,7 @@ pub fn read_instances_from_db(
 
 pub fn insert_into_db(
     conn: &Connection,
-    text_areas: &[TextAreaContainer],
+    text_areas: &mut [TextAreaContainer],
 ) -> Result<(), rusqlite::Error> {
     let default = String::from("0");
     let texts: Vec<&str> = text_areas
@@ -92,9 +90,53 @@ pub fn insert_into_db(
     )?;
 
     conn.execute(
-        "INSERT INTO instances (name, eventtype, isrecurring, isfinished, percentage, timesfinished, daylimit) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        (texts[1], texts[0], texts[2], texts[3], texts[4], texts[5], texts[6]),
+        "INSERT INTO instances (name, eventtype, isrecurring, percentage, timesfinished, daylimit) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        (texts[1], texts[0], texts[2], texts[3], texts[4], texts[5]),
     )?;
 
+    text_areas.iter_mut().for_each(|ta| {
+        ta.clear_text();
+        ta.inactivate();
+        ta.validate();
+    });
+
+    text_areas[0].activate();
+
+    Ok(())
+}
+
+pub fn update_instance(conn: &Connection, instance: &InstanceItem) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE instances \
+        SET percentage = ?2, \
+            timesfinished = ?3 \
+        WHERE \
+            instanceid = ?1;",
+        (
+            instance.instanceid,
+            instance.percentage,
+            instance.timesfinished,
+        ),
+    )?;
+    Ok(())
+}
+
+pub fn delete_instance(conn: &Connection, instance: &InstanceItem) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "DELETE \
+        FROM instances \
+        WHERE instanceid = ?1",
+        (instance.instanceid,),
+    )?;
+    Ok(())
+}
+
+pub fn delete_event(conn: &Connection, event: &EventItem) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "DELETE \
+        FROM events \
+        WHERE name = ?1",
+        (&event.name,),
+    )?;
     Ok(())
 }

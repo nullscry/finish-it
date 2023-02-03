@@ -1,4 +1,4 @@
-use tui_textarea::TextArea;
+use tui_textarea::{CursorMove, TextArea};
 
 use tui::{
     layout::Alignment,
@@ -8,7 +8,7 @@ use tui::{
 };
 pub enum AreaType {
     UInt,
-    Float,
+    Percentage,
     Bool,
     String,
 }
@@ -36,7 +36,13 @@ impl TextAreaContainer<'_> {
             .cloned()
             .unwrap_or_else(|| Block::default().borders(Borders::ALL));
         self.text_area
-            .set_block(b.style(Style::default()).title(self.title.to_string()))
+            .set_block(b.style(Style::default()).title(self.title.to_string()));
+    }
+
+    pub fn clear_text(&mut self) {
+        self.text_area.move_cursor(CursorMove::Head);
+        self.text_area.delete_line_by_end();
+        self.ok = false;
     }
 
     pub fn inactivate(&mut self) {
@@ -77,7 +83,7 @@ impl TextAreaContainer<'_> {
     pub fn validate(&mut self) {
         self.ok = match self.area_type {
             AreaType::UInt => self.validate_value_uint(),
-            AreaType::Float => self.validate_value_float(),
+            AreaType::Percentage => self.validate_value_float(),
             AreaType::Bool => self.validate_value_bool(),
             AreaType::String => self.validate_value_string(),
         }
@@ -94,16 +100,17 @@ impl TextAreaContainer<'_> {
     }
 
     fn validate_value_float(&mut self) -> bool {
-        match self.text_area.lines()[0].parse::<f64>() {
-            Ok(x) => {
-                if (0.0..=100.0).contains(&x) {
+        match self.text_area.lines()[0].parse::<u8>() {
+            Ok(x) => match x {
+                0..=100 => {
                     self.set_border_ok();
                     true
-                } else {
+                }
+                _ => {
                     self.set_border_error();
                     false
                 }
-            }
+            },
             Err(_) => {
                 self.set_border_error();
                 false
@@ -148,13 +155,12 @@ impl TextAreaContainer<'_> {
     }
 }
 
-pub fn get_text_areas() -> [TextAreaContainer<'static>; 7] {
+pub fn get_text_areas() -> [TextAreaContainer<'static>; 6] {
     let mut text_areas = [
         TextAreaContainer::new("Event Name".to_string(), AreaType::String),
         TextAreaContainer::new("Instance Name".to_string(), AreaType::String),
         TextAreaContainer::new("Is Recurring? (0 OR 1)".to_string(), AreaType::Bool),
-        TextAreaContainer::new("Is Finished? (0 OR 1)".to_string(), AreaType::Bool),
-        TextAreaContainer::new("% Completed [0.0, 100.0]".to_string(), AreaType::Float),
+        TextAreaContainer::new("% Completed [0, 100]".to_string(), AreaType::Percentage),
         TextAreaContainer::new("# Completed [0, ...]".to_string(), AreaType::UInt),
         TextAreaContainer::new("Day Limit [0, ...]".to_string(), AreaType::UInt),
     ];
@@ -171,7 +177,7 @@ pub fn get_text_areas() -> [TextAreaContainer<'static>; 7] {
     text_areas
 }
 
-pub fn validate_text_areas(text_areas: &[TextAreaContainer<'static>; 7]) -> bool {
+pub fn validate_text_areas(text_areas: &[TextAreaContainer<'static>; 6]) -> bool {
     let ok_sum = text_areas
         .iter()
         .map(TextAreaContainer::is_ok)

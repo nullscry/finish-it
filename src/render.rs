@@ -11,7 +11,7 @@ use tui::{
 };
 
 use super::db::{read_events_from_db, read_instances_from_db};
-use super::InstanceItem;
+use super::{EventItem, InstanceItem};
 use crate::ActiveBlock;
 
 pub fn render_home<'a>() -> Paragraph<'a> {
@@ -44,7 +44,7 @@ pub fn render_events<'a>(
     instance_list_state: &TableState,
     conn: &Connection,
     active_block: &ActiveBlock,
-) -> (List<'a>, InstanceItem, Table<'a>) {
+) -> (List<'a>, InstanceItem, EventItem, Table<'a>) {
     let (list_highlight, table_highlight) = match active_block {
         ActiveBlock::EventBlock => (Color::Red, Color::Yellow),
         ActiveBlock::InstanceBlock => (Color::Yellow, Color::Red),
@@ -68,12 +68,8 @@ pub fn render_events<'a>(
         .collect();
 
     let selected_event = event_list
-        .get(
-            event_list_state
-                .selected()
-                .expect("there is always a selected EventItem"),
-        )
-        .expect("exists")
+        .get(event_list_state.selected().unwrap_or(0))
+        .unwrap_or(&EventItem::default())
         .clone();
 
     let list = List::new(items).block(events).highlight_style(
@@ -101,7 +97,6 @@ pub fn render_events<'a>(
             Cell::from(Span::raw(instance.name.to_string())),
             Cell::from(Span::raw(instance.get_dot_vec())),
             Cell::from(Span::raw(instance.isrecurring.to_string())),
-            Cell::from(Span::raw(instance.isfinished.to_string())),
             Cell::from(Span::raw(instance.percentage.to_string())),
             Cell::from(Span::raw(instance.timesfinished.to_string())),
             Cell::from(Span::raw(instance.daylimit.to_string())),
@@ -125,10 +120,6 @@ pub fn render_events<'a>(
             )),
             Cell::from(Span::styled(
                 "Recur",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Cell::from(Span::styled(
-                "Completed",
                 Style::default().add_modifier(Modifier::BOLD),
             )),
             Cell::from(Span::styled(
@@ -158,13 +149,12 @@ pub fn render_events<'a>(
         .widths(&[
             Constraint::Percentage(5),
             Constraint::Percentage(20),
-            Constraint::Percentage(35),
-            Constraint::Percentage(5),
-            Constraint::Percentage(5),
-            Constraint::Percentage(5),
-            Constraint::Percentage(5),
-            Constraint::Percentage(5),
             Constraint::Percentage(15),
+            Constraint::Percentage(10),
+            Constraint::Percentage(10),
+            Constraint::Percentage(10),
+            Constraint::Percentage(10),
+            Constraint::Percentage(20),
         ])
         .highlight_style(
             Style::default()
@@ -182,7 +172,7 @@ pub fn render_events<'a>(
     //     .expect("exists")
     //     .clone();
 
-    (list, selected_instance, instance_detail)
+    (list, selected_instance, selected_event, instance_detail)
 }
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
