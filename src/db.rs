@@ -1,5 +1,6 @@
 use rusqlite::{Connection, Result};
 use std::path;
+use tui::widgets::StatefulWidget;
 
 use super::add::TextAreaContainer;
 use crate::{EventItem, InstanceItem};

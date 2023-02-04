@@ -672,6 +672,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ) => {
                     delete_event(&conn, &selected_event)?;
                     active_popup = ActivePopUp::None;
+                    match read_events_from_db(&conn) {
+                        Ok(e) => {
+                            if e.is_empty() {
+                                event_list_state.select(None);
+                            } else if let Some(selected) = event_list_state.selected() {
+                                if selected >= e.len() {
+                                    event_list_state.select(Some(e.len() - 1));
+                                }
+                            }
+                        }
+                        Err(_) => {}
+                    }
                 }
 
                 (
@@ -826,6 +838,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ) => {
                     delete_instance(&conn, &selected_instance)?;
                     active_popup = ActivePopUp::None;
+                    match read_events_from_db(&conn) {
+                        Ok(e) => {
+                            if !e.is_empty() {
+                                match e.get(event_list_state.selected().unwrap_or(0)) {
+                                    Some(sel_event) => {
+                                        instance_count =
+                                            read_instances_count_from_db(&conn, &sel_event.name)?;
+                                        if instance_count == 0 {
+                                            active_block = ActiveBlock::EventBlock;
+                                        } else if let Some(selected) =
+                                            instance_list_state.selected()
+                                        {
+                                            if selected >= instance_count {
+                                                instance_list_state
+                                                    .select(Some(instance_count - 1));
+                                            }
+                                        }
+                                    }
+                                    None => {}
+                                }
+                            }
+                        }
+                        Err(_) => {}
+                    }
                 }
 
                 // Instances - For Both Popups
