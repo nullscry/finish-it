@@ -10,8 +10,8 @@ use tui::{
     },
 };
 
-use super::db::{read_events_from_db, read_instances_from_db};
-use super::{EventItem, InstanceItem};
+use super::db::{read_items_from_db, read_topics_from_db};
+use super::{Item, Topic};
 use crate::ActiveBlock;
 
 pub fn render_home<'a>() -> Paragraph<'a> {
@@ -22,11 +22,11 @@ pub fn render_home<'a>() -> Paragraph<'a> {
         Spans::from(vec![Span::raw("to")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::styled(
-            "EventItem-CLI",
+            "Topic-CLI",
             Style::default().fg(Color::LightBlue),
         )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press 'Alt+e' to access events, 'Alt+a' to add instances and 'Alt+u' to update and 'Alt+d' to delete the currently selected EventItem.")]),
+        Spans::from(vec![Span::raw("Press 'Alt+e' to access topics, 'Alt+a' to add items and 'Alt+u' to update and 'Alt+d' to delete the currently selected Topic.")]),
     ])
     .alignment(Alignment::Center)
     .block(
@@ -39,29 +39,29 @@ pub fn render_home<'a>() -> Paragraph<'a> {
     home
 }
 
-pub fn render_events<'a>(
+pub fn render_topics<'a>(
     event_list_state: &ListState,
-    instance_list_state: &TableState,
+    item_list_state: &TableState,
     conn: &Connection,
     active_block: &ActiveBlock,
-) -> (List<'a>, InstanceItem, EventItem, Table<'a>) {
+) -> (List<'a>, Item, Topic, Table<'a>) {
     let (list_highlight, table_highlight) = match active_block {
-        ActiveBlock::EventBlock => (Color::Red, Color::Yellow),
+        ActiveBlock::Event => (Color::Red, Color::Yellow),
         ActiveBlock::InstanceBlock => (Color::Yellow, Color::Red),
     };
-    let events = Block::default()
+    let topics = Block::default()
         .borders(Borders::ALL)
         .style(Style::default().fg(Color::White))
-        .title("events")
+        .title("Topics")
         .border_type(BorderType::Plain);
 
-    let event_list = read_events_from_db(conn).expect("can fetch EventItem list");
+    let event_list = read_topics_from_db(conn).expect("can fetch Topic list");
 
     let items: Vec<_> = event_list
         .iter()
-        .map(|instance| {
+        .map(|item| {
             ListItem::new(Spans::from(vec![Span::styled(
-                instance.name.clone(),
+                item.name.clone(),
                 Style::default(),
             )]))
         })
@@ -69,42 +69,41 @@ pub fn render_events<'a>(
 
     let selected_event = event_list
         .get(event_list_state.selected().unwrap_or(0))
-        .unwrap_or(&EventItem::default())
+        .unwrap_or(&Topic::default())
         .clone();
 
-    let list = List::new(items).block(events).highlight_style(
+    let list = List::new(items).block(topics).highlight_style(
         Style::default()
             .bg(list_highlight)
             .fg(Color::Black)
             .add_modifier(Modifier::BOLD),
     );
 
-    let instance_list =
-        read_instances_from_db(conn, &selected_event.name).expect("can fetch EventItem list");
+    let item_list = read_items_from_db(conn, &selected_event.name).expect("can fetch Topic list");
 
-    let selected_instance = match instance_list_state.selected() {
-        Some(i) => match instance_list.get(i) {
+    let selected_item = match item_list_state.selected() {
+        Some(i) => match item_list.get(i) {
             Some(inst) => inst.to_owned(),
-            None => InstanceItem::default(),
+            None => Item::default(),
         },
-        None => InstanceItem::default(),
+        None => Item::default(),
     };
 
     let mut rows: Vec<Row<'a>> = Vec::new();
-    for instance in instance_list {
+    for item in item_list {
         rows.push(Row::new(vec![
-            Cell::from(Span::raw(instance.instanceid.to_string())),
-            Cell::from(Span::raw(instance.name.to_string())),
-            Cell::from(Span::raw(instance.get_dot_vec())),
-            Cell::from(Span::raw(instance.isrecurring.to_string())),
-            Cell::from(Span::raw(instance.percentage.to_string())),
-            Cell::from(Span::raw(instance.timesfinished.to_string())),
-            Cell::from(Span::raw(instance.daylimit.to_string())),
-            Cell::from(Span::raw(instance.created.to_string())),
+            Cell::from(Span::raw(item.id.to_string())),
+            Cell::from(Span::raw(item.name.to_string())),
+            Cell::from(Span::raw(item.get_dot_vec())),
+            Cell::from(Span::raw(item.isrecurring.to_string())),
+            Cell::from(Span::raw(item.percentage.to_string())),
+            Cell::from(Span::raw(item.timesfinished.to_string())),
+            Cell::from(Span::raw(item.daylimit.to_string())),
+            Cell::from(Span::raw(item.created.to_string())),
         ]));
     }
 
-    let instance_detail = Table::new(rows)
+    let item_detail = Table::new(rows)
         .header(Row::new(vec![
             Cell::from(Span::styled(
                 "ID",
@@ -143,7 +142,7 @@ pub fn render_events<'a>(
             Block::default()
                 .borders(Borders::ALL)
                 .style(Style::default().fg(Color::White))
-                .title("Detail")
+                .title("Items")
                 .border_type(BorderType::Plain),
         )
         .widths(&[
@@ -163,16 +162,16 @@ pub fn render_events<'a>(
                 .add_modifier(Modifier::BOLD),
         );
 
-    // let selected_instance = instance_list
+    // let selected_item = item_list
     //     .get(
-    //         instance_list_state
+    //         item_list_state
     //             .selected()
-    //             .expect("there is always a selected EventItem"),
+    //             .expect("there is always a selected Topic"),
     //     )
     //     .expect("exists")
     //     .clone();
 
-    (list, selected_instance, selected_event, instance_detail)
+    (list, selected_item, selected_event, item_detail)
 }
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {

@@ -157,8 +157,8 @@ impl TextAreaContainer<'_> {
 
 pub fn get_text_areas() -> [TextAreaContainer<'static>; 6] {
     let mut text_areas = [
-        TextAreaContainer::new("Event Name".to_string(), AreaType::String),
-        TextAreaContainer::new("Instance Name".to_string(), AreaType::String),
+        TextAreaContainer::new("Topic Name".to_string(), AreaType::String),
+        TextAreaContainer::new("Item Name".to_string(), AreaType::String),
         TextAreaContainer::new("Is Recurring? (0 OR 1)".to_string(), AreaType::Bool),
         TextAreaContainer::new("% Completed [0, 100]".to_string(), AreaType::Percentage),
         TextAreaContainer::new("# Completed [0, ...]".to_string(), AreaType::UInt),
@@ -196,9 +196,9 @@ pub fn get_add_err_text() -> Paragraph<'static> {
         )]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw(
-            "Type out your desired new Instance as laid out by the boxes.",
+            "Type out your desired new Item as laid out by the boxes.",
         )]),
-        Spans::from(vec![Span::raw("Event and Instance cannot be blank.")]),
+        Spans::from(vec![Span::raw("Topic and Item cannot be blank.")]),
         Spans::from(vec![Span::raw(
             "The rest all show which values are allowed next to their names.",
         )]),
@@ -212,7 +212,7 @@ pub fn get_add_err_text() -> Paragraph<'static> {
             "When everything is green and you are given the ok, ",
         )]),
         Spans::from(vec![Span::raw(
-            "press Enter key at the last box to add your new instance!",
+            "press Enter key at the last box to add your new item!",
         )]),
     ];
     let err_color = Color::LightRed;
@@ -233,10 +233,10 @@ pub fn get_add_ok_text() -> Paragraph<'static> {
         Spans::from(vec![Span::raw("Everything is in order!")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Confirm your instance by pressing the Enter key when the last box is selected.")]),
+        Spans::from(vec![Span::raw("Confirm your item by pressing the Enter key when the last box is selected.")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("You can see your new addition by going back to the Events screen with Alt+e after adding it.")]),
+        Spans::from(vec![Span::raw("You can see your new addition by going back to the Topics screen with Alt+e after adding it.")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw("")]),
     ];

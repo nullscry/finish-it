@@ -4,6 +4,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::io;
 use std::sync::mpsc;
 use std::thread;
@@ -19,9 +20,7 @@ use tui::{
 };
 
 mod add;
-use add::{
-    get_add_err_text, get_add_ok_text, get_text_areas, validate_text_areas, TextAreaContainer,
-};
+use add::{get_add_err_text, get_add_ok_text, get_text_areas, validate_text_areas};
 
 mod db;
 use db::*;
@@ -33,7 +32,7 @@ use rusqlite::Result;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ActiveBlock {
-    EventBlock,
+    Event,
     InstanceBlock,
 }
 
@@ -45,17 +44,18 @@ pub enum ActivePopUp {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct EventItem {
+pub struct Topic {
     name: String,
     created: DateTime<Utc>,
 }
 
-impl EventItem {
+impl Topic {
     fn as_delete_paragraph(&self) -> Paragraph {
         let text = vec![
-            Spans::from(
-                vec![Span::raw(format!("Are you sure you want to DELETE Event {} and ALL INSTANCES belonging to this Event", self.name.to_owned()))],
-            ),
+            Spans::from(vec![Span::raw(format!(
+                "Are you sure you want to DELETE Topic {} and ALL ITEMS belonging to this Topic",
+                self.name.to_owned()
+            ))]),
             Spans::from(vec![Span::raw("Hit Enter to Confirm or Esc to cancel")]),
         ];
 
@@ -66,18 +66,18 @@ impl EventItem {
                 Block::default()
                     .borders(Borders::ALL)
                     .style(Style::default().fg(Color::White))
-                    .title("Modifying")
+                    .title("Updating Progress")
                     .border_type(BorderType::Plain),
             );
         block
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct InstanceItem {
-    instanceid: usize,
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct Item {
+    id: usize,
     name: String,
-    eventtype: String,
+    topicname: String,
     isrecurring: u8,
     percentage: u8,
     timesfinished: usize,
@@ -85,7 +85,39 @@ pub struct InstanceItem {
     created: DateTime<Utc>,
 }
 
-impl InstanceItem {
+// enum Confirm {
+//     No,
+//     Yes,
+// }
+
+// impl From<Confirm> for usize {
+//     fn from(input: Confirm) -> usize {
+//         match input {
+//             Confirm::No => 0,
+//             Confirm::Yes => 1,
+//         }
+//     }
+// }
+
+// impl fmt::Display for Confirm {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         match self {
+//             Confirm::No => write!(f, "N"),
+//             Confirm::Yes => write!(f, "Y"),
+//         }
+//     }
+// }
+
+// impl Confirm {
+//     pub fn validate(confirm_str: &str) -> bool {
+//         match confirm_str.to_lowercase().as_str() {
+//             "y" | "yes" | "n" | "no" => true,
+//             _ => false,
+//         }
+//     }
+// }
+
+impl Item {
     pub fn get_dot_vec(&self) -> String {
         let p = self.percentage as usize;
         let p = p / 5;
@@ -156,7 +188,7 @@ impl InstanceItem {
 
     fn as_update_paragraph(&self) -> Paragraph {
         let text = vec![
-            Spans::from(vec![Span::raw(self.eventtype.to_owned())]),
+            Spans::from(vec![Span::raw(self.topicname.to_owned())]),
             Spans::from(vec![Span::raw(self.name.to_owned())]),
             Spans::from(vec![Span::raw("")]),
             Spans::from(vec![Span::raw(format!(
@@ -183,7 +215,7 @@ impl InstanceItem {
                 Block::default()
                     .borders(Borders::ALL)
                     .style(Style::default().fg(Color::White))
-                    .title("Modifying")
+                    .title("Updating Progress")
                     .border_type(BorderType::Plain),
             );
         block
@@ -193,7 +225,7 @@ impl InstanceItem {
         let text = vec![
             Spans::from(vec![Span::raw("Are you sure you want to DELETE:")]),
             Spans::from(vec![Span::raw(self.name.to_owned())]),
-            Spans::from(vec![Span::raw("Hit Enter to Confirm or Esc to cancel")]),
+            Spans::from(vec![Span::raw("Hit Enter to Confirm or Esc to Cancel")]),
         ];
 
         let block = Paragraph::new(text)
@@ -203,27 +235,27 @@ impl InstanceItem {
                 Block::default()
                     .borders(Borders::ALL)
                     .style(Style::default().fg(Color::White))
-                    .title("Modifying")
+                    .title("Updating Progress")
                     .border_type(BorderType::Plain),
             );
         block
     }
 }
 
-impl Default for InstanceItem {
-    fn default() -> Self {
-        InstanceItem {
-            instanceid: 0,
-            name: "".to_string(),
-            eventtype: "".to_string(),
-            isrecurring: 0,
-            percentage: 0,
-            timesfinished: 0,
-            daylimit: 0,
-            created: chrono::offset::Utc::now(),
-        }
-    }
-}
+// impl Default for Item {
+//     fn default() -> Self {
+//         Item {
+//             id: 0,
+//             name: "".to_string(),
+//             topicname: "".to_string(),
+//             isrecurring: 0,
+//             percentage: 0,
+//             timesfinished: 0,
+//             daylimit: 0,
+//             created: chrono::offset::Utc::now(),
+//         }
+//     }
+// }
 
 // #[derive(Error, Debug)]
 // pub enum Error {
@@ -269,8 +301,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap_or_else(|| Duration::from_secs(0));
 
             if event::poll(timeout).expect("poll works") {
-                if let CEvent::Key(key) = event::read().expect("can read events") {
-                    tx.send(Event::Input(key)).expect("can send events");
+                if let CEvent::Key(key) = event::read().expect("can read topics") {
+                    tx.send(Event::Input(key)).expect("can send topics");
                 }
             }
 
@@ -285,20 +317,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let menu_titles = vec!["Home", "Events", "Add", "Delete", "Quit"];
+    let menu_titles = vec!["Home", "Topics", "Add", "Quit"];
 
     let mut active_menu_item = MenuItem::Home;
-    let mut active_block = ActiveBlock::EventBlock;
+    let mut active_block = ActiveBlock::Event;
 
-    let mut event_list_state = ListState::default();
-    event_list_state.select(None);
+    let mut topic_list_state = ListState::default();
+    topic_list_state.select(None);
 
-    let mut instance_list_state = TableState::default();
-    instance_list_state.select(Some(0));
+    let mut item_list_state = TableState::default();
+    item_list_state.select(Some(0));
 
-    let mut instance_count = 0;
+    let mut item_count = 0;
 
-    let mut events = read_events_from_db(&conn).expect("can fetch EventItem list");
+    // let topics = read_topics_from_db(&conn).expect("can fetch Topic list");
 
     let mut text_areas = get_text_areas();
 
@@ -308,12 +340,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut active_popup = ActivePopUp::None;
     // let mut progress_amount: f64 = 0.0;
-    let mut selected_instance = InstanceItem::default();
-    let mut selected_event = EventItem::default();
+    let mut selected_item = Item::default();
+    let mut selected_topic = Topic::default();
 
     loop {
         terminal.draw(|rect| {
-            // let selected_instance: &InstanceItem;
+            // let selected_item: &Item;
             let size = rect.size();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
@@ -328,14 +360,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .split(size);
 
-            let copyright = Paragraph::new("Hit Enter to enter Edit mode. Edit Progress with <-, -> and Enter again to confirm. Alt+W to delete selected instance.")
+            let copyright = Paragraph::new("Highlight an Item and hit Enter to edit its progress. Hit Delete key on selected Item or Topic to delete them.")
                 .style(Style::default().fg(Color::LightCyan))
                 .alignment(Alignment::Center)
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
                         .style(Style::default().fg(Color::White))
-                        .title("Modifying")
+                        .title("Updating Progress")
                         .border_type(BorderType::Plain),
                 );
 
@@ -367,19 +399,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             match active_menu_item {
                 MenuItem::Home => rect.render_widget(render_home(), chunks[1]),
                 MenuItem::Instances => {
-                    let event_chunks = Layout::default()
+                    let topic_chunks = Layout::default()
                         .direction(Direction::Horizontal)
                         .constraints(
                             [Constraint::Percentage(20), Constraint::Percentage(80)].as_ref(),
                         )
                         .split(chunks[1]);
-                    let (left, selected_instance_, selected_event_, right) = render_events(&event_list_state, &instance_list_state, &conn, &active_block);
+                    let (left, selected_item_, selected_topic_, right) = render_topics(&topic_list_state, &item_list_state, &conn, &active_block);
 
-                    rect.render_stateful_widget(left, event_chunks[0], &mut event_list_state);
-                    rect.render_stateful_widget(right, event_chunks[1], &mut instance_list_state);
+                    rect.render_stateful_widget(left, topic_chunks[0], &mut topic_list_state);
+                    rect.render_stateful_widget(right, topic_chunks[1], &mut item_list_state);
                     match (active_block, active_popup) {
                         (ActiveBlock::InstanceBlock, ActivePopUp::Update) => {
-                            let block = selected_instance.as_update_paragraph();
+                            let block = selected_item.as_update_paragraph();
 
                             let area = centered_rect(60, 20, size);
                             rect.render_widget(Clear, area);
@@ -387,25 +419,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
 
                         (ActiveBlock::InstanceBlock, ActivePopUp::Delete) => {
-                            let block = selected_instance.as_delete_paragraph();
+                            let block = selected_item.as_delete_paragraph();
                             let area = centered_rect(60, 20, size);
                             rect.render_widget(Clear, area);
                             rect.render_widget(block, area);
                         }
 
-                        (ActiveBlock::EventBlock, ActivePopUp::Delete) => {
-                            let block = selected_event.as_delete_paragraph();
+                        (ActiveBlock::Event, ActivePopUp::Delete) => {
+                            let block = selected_topic.as_delete_paragraph();
                             let area = centered_rect(60, 20, size);
                             rect.render_widget(Clear, area);
                             rect.render_widget(block, area);
                         }
 
-                        (ActiveBlock::EventBlock, ActivePopUp::Update) => {}
+                        (ActiveBlock::Event, ActivePopUp::Update) => {}
 
 
                         (_, ActivePopUp::None) => {
-                            selected_instance = selected_instance_;
-                            selected_event = selected_event_;
+                            selected_item = selected_item_;
+                            selected_topic = selected_topic_;
                         }
                     }
                     // let block = Block::default().title("Popup").borders(Borders::ALL);
@@ -460,13 +492,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
         match rx.recv()? {
-            Event::Input(event) => match (event, active_menu_item, active_block, active_popup) {
+            Event::Input(topic) => match (topic, active_menu_item, active_block, active_popup) {
                 // Global Keys
                 (
                     KeyEvent {
                         code: KeyCode::Char('q'),
                         modifiers: KeyModifiers::ALT,
                         ..
+                    }
+                    | KeyEvent {
+                        code: KeyCode::End, ..
                     },
                     _,
                     _,
@@ -490,8 +525,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 (
                     KeyEvent {
-                        code: KeyCode::Char('e'),
+                        code: KeyCode::Char('t'),
                         modifiers: KeyModifiers::ALT,
+                        ..
+                    }
+                    | KeyEvent {
+                        code: KeyCode::Home,
                         ..
                     },
                     _,
@@ -504,16 +543,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         code: KeyCode::Char('a'),
                         modifiers: KeyModifiers::ALT,
                         ..
+                    }
+                    | KeyEvent {
+                        code: KeyCode::Insert,
+                        ..
                     },
                     _,
                     _,
                     ActivePopUp::None,
                 ) => active_menu_item = MenuItem::Add,
                 // KeyCode::Char('a') => {
-                //     add_random_pet_to_db().expect("can add new random EventItem");
+                //     add_random_pet_to_db().expect("can add new random Topic");
                 // }
                 // KeyCode::Char('d') => {
-                //     remove_pet_at_index(&mut event_list_state).expect("can remove EventItem");
+                //     remove_pet_at_index(&mut topic_list_state).expect("can remove Topic");
                 // }
 
                 // Instances - Event Block Keys
@@ -523,33 +566,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ..
                     },
                     MenuItem::Instances,
-                    ActiveBlock::EventBlock,
+                    ActiveBlock::Event,
                     ActivePopUp::None,
                 ) => {
-                    match read_events_from_db(&conn) {
+                    match read_topics_from_db(&conn) {
                         Ok(e) => {
                             if !e.is_empty() {
-                                let selected = match event_list_state.selected() {
+                                let selected = match topic_list_state.selected() {
                                     Some(s) => s,
                                     None => 0,
                                 };
                                 if selected >= e.len() - 1 {
-                                    event_list_state.select(Some(0));
+                                    topic_list_state.select(Some(0));
                                 } else {
-                                    event_list_state.select(Some(selected + 1));
+                                    topic_list_state.select(Some(selected + 1));
                                 }
                             }
                         }
                         Err(_) => {}
                     }
 
-                    // let amount_events = read_events_from_db(&conn)
-                    //     .expect("can fetch EventItem list")
+                    // let amount_topics = read_topics_from_db(&conn)
+                    //     .expect("can fetch Topic list")
                     //     .len();
-                    // if selected >= amount_events - 1 {
-                    //     event_list_state.select(Some(0));
+                    // if selected >= amount_topics - 1 {
+                    //     topic_list_state.select(Some(0));
                     // } else {
-                    //     event_list_state.select(Some(selected + 1));
+                    //     topic_list_state.select(Some(selected + 1));
                     // }
                 }
 
@@ -558,44 +601,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         code: KeyCode::Up, ..
                     },
                     MenuItem::Instances,
-                    ActiveBlock::EventBlock,
+                    ActiveBlock::Event,
                     ActivePopUp::None,
                 ) => {
-                    // if let Some(selected) = event_list_state.selected() {
-                    //     match read_events_from_db(&conn) {
+                    // if let Some(selected) = topic_list_state.selected() {
+                    //     match read_topics_from_db(&conn) {
                     //         Ok(e) => {
                     //             if e.len() > 0 {
-                    //                 let amount_events = e.len();
+                    //                 let amount_topics = e.len();
                     //                 if selected > 0 {
-                    //                     event_list_state.select(Some(selected - 1));
+                    //                     topic_list_state.select(Some(selected - 1));
                     //                 } else {
-                    //                     event_list_state.select(Some(amount_events - 1));
+                    //                     topic_list_state.select(Some(amount_topics - 1));
                     //                 }
                     //             }
                     //         }
                     //         Err(_) => {}
                     //     }
 
-                    //     // let amount_events = read_events_from_db(&conn)
-                    //     //     .expect("can fetch EventItem list")
+                    //     // let amount_topics = read_topics_from_db(&conn)
+                    //     //     .expect("can fetch Topic list")
                     //     //     .len();
                     //     // if selected > 0 {
-                    //     //     event_list_state.select(Some(selected - 1));
+                    //     //     topic_list_state.select(Some(selected - 1));
                     //     // } else {
-                    //     //     event_list_state.select(Some(amount_events - 1));
+                    //     //     topic_list_state.select(Some(amount_topics - 1));
                     //     // }
                     // }
-                    match read_events_from_db(&conn) {
+                    match read_topics_from_db(&conn) {
                         Ok(e) => {
                             if !e.is_empty() {
-                                let selected = match event_list_state.selected() {
+                                let selected = match topic_list_state.selected() {
                                     Some(s) => s,
                                     None => 0,
                                 };
                                 if selected > 0 {
-                                    event_list_state.select(Some(selected - 1));
+                                    topic_list_state.select(Some(selected - 1));
                                 } else {
-                                    event_list_state.select(Some(e.len() - 1));
+                                    topic_list_state.select(Some(e.len() - 1));
                                 }
                             }
                         }
@@ -609,19 +652,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ..
                     },
                     MenuItem::Instances,
-                    ActiveBlock::EventBlock,
+                    ActiveBlock::Event,
                     ActivePopUp::None,
                 ) => {
-                    match read_events_from_db(&conn) {
+                    match read_topics_from_db(&conn) {
                         Ok(e) => {
                             if !e.is_empty() {
-                                match e.get(event_list_state.selected().unwrap_or(0)) {
-                                    Some(sel_event) => {
-                                        instance_count =
-                                            read_instances_count_from_db(&conn, &sel_event.name)?;
-                                        if instance_count > 0 {
+                                match e.get(topic_list_state.selected().unwrap_or(0)) {
+                                    Some(sel_topic) => {
+                                        item_count =
+                                            read_items_count_from_db(&conn, &sel_topic.name)?;
+                                        if item_count > 0 {
                                             active_block = ActiveBlock::InstanceBlock;
-                                            instance_list_state.select(Some(0));
+                                            item_list_state.select(Some(0));
                                         }
                                     }
                                     None => {}
@@ -631,10 +674,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Err(_) => {}
                     }
 
-                    // instance_count = match read_instances_count_from_db(
+                    // item_count = match read_items_count_from_db(
                     //     &conn,
-                    //     &events
-                    //         .get(event_list_state.selected().unwrap_or(0))
+                    //     &topics
+                    //         .get(topic_list_state.selected().unwrap_or(0))
                     //         .expect("Event list state error")
                     //         .name,
                     // ) {
@@ -642,20 +685,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     //     Err(_) => 0,
                     // };
 
-                    // if instance_count > 0 {
+                    // if item_count > 0 {
                     //     active_block = ActiveBlock::InstanceBlock;
-                    //     instance_list_state.select(Some(0));
+                    //     item_list_state.select(Some(0));
                     // }
                 }
 
                 (
                     KeyEvent {
-                        code: KeyCode::Char('d'),
-                        modifiers: KeyModifiers::ALT,
+                        code: KeyCode::Delete,
                         ..
                     },
                     MenuItem::Instances,
-                    ActiveBlock::EventBlock,
+                    ActiveBlock::Event,
                     ActivePopUp::None,
                 ) => {
                     active_popup = ActivePopUp::Delete;
@@ -667,18 +709,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ..
                     },
                     MenuItem::Instances,
-                    ActiveBlock::EventBlock,
+                    ActiveBlock::Event,
                     ActivePopUp::Delete,
                 ) => {
-                    delete_event(&conn, &selected_event)?;
+                    delete_topic(&conn, &selected_topic)?;
                     active_popup = ActivePopUp::None;
-                    match read_events_from_db(&conn) {
+                    match read_topics_from_db(&conn) {
                         Ok(e) => {
                             if e.is_empty() {
-                                event_list_state.select(None);
-                            } else if let Some(selected) = event_list_state.selected() {
+                                topic_list_state.select(None);
+                            } else if let Some(selected) = topic_list_state.selected() {
                                 if selected >= e.len() {
-                                    event_list_state.select(Some(e.len() - 1));
+                                    topic_list_state.select(Some(e.len() - 1));
                                 }
                             }
                         }
@@ -691,7 +733,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         code: KeyCode::Esc, ..
                     },
                     MenuItem::Instances,
-                    ActiveBlock::EventBlock,
+                    ActiveBlock::Event,
                     ActivePopUp::Delete,
                 ) => {}
 
@@ -705,12 +747,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::None,
                 ) => {
-                    if let Some(selected) = instance_list_state.selected() {
-                        if instance_count > 0 {
-                            if selected >= instance_count - 1 {
-                                instance_list_state.select(Some(0));
+                    if let Some(selected) = item_list_state.selected() {
+                        if item_count > 0 {
+                            if selected >= item_count - 1 {
+                                item_list_state.select(Some(0));
                             } else {
-                                instance_list_state.select(Some(selected + 1));
+                                item_list_state.select(Some(selected + 1));
                             }
                         }
                     }
@@ -724,12 +766,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::None,
                 ) => {
-                    if let Some(selected) = instance_list_state.selected() {
-                        if instance_count > 0 {
+                    if let Some(selected) = item_list_state.selected() {
+                        if item_count > 0 {
                             if selected > 0 {
-                                instance_list_state.select(Some(selected - 1));
+                                item_list_state.select(Some(selected - 1));
                             } else {
-                                instance_list_state.select(Some(instance_count - 1));
+                                item_list_state.select(Some(item_count - 1));
                             }
                         }
                     }
@@ -744,12 +786,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::None,
                 ) => {
-                    active_block = ActiveBlock::EventBlock;
-                    let selected = match event_list_state.selected() {
+                    active_block = ActiveBlock::Event;
+                    let selected = match topic_list_state.selected() {
                         Some(s) => s,
                         None => 0,
                     };
-                    event_list_state.select(Some(selected));
+                    topic_list_state.select(Some(selected));
                 }
 
                 (
@@ -766,8 +808,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 (
                     KeyEvent {
-                        code: KeyCode::Char('d'),
-                        modifiers: KeyModifiers::ALT,
+                        code: KeyCode::Delete,
                         ..
                     },
                     MenuItem::Instances,
@@ -787,7 +828,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::Update,
                 ) => {
-                    selected_instance.increment_one();
+                    selected_item.increment_one();
                 }
 
                 (
@@ -799,7 +840,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::Update,
                 ) => {
-                    selected_instance.decrement_one();
+                    selected_item.decrement_one();
                 }
 
                 (
@@ -810,7 +851,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::Update,
                 ) => {
-                    selected_instance.finish_once();
+                    selected_item.finish_once();
                 }
 
                 (
@@ -822,7 +863,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::Update,
                 ) => {
-                    update_instance(&conn, &selected_instance)?;
+                    update_item(&conn, &selected_item)?;
                     active_popup = ActivePopUp::None;
                 }
 
@@ -836,23 +877,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActiveBlock::InstanceBlock,
                     ActivePopUp::Delete,
                 ) => {
-                    delete_instance(&conn, &selected_instance)?;
+                    delete_item(&conn, &selected_item)?;
                     active_popup = ActivePopUp::None;
-                    match read_events_from_db(&conn) {
+                    match read_topics_from_db(&conn) {
                         Ok(e) => {
                             if !e.is_empty() {
-                                match e.get(event_list_state.selected().unwrap_or(0)) {
-                                    Some(sel_event) => {
-                                        instance_count =
-                                            read_instances_count_from_db(&conn, &sel_event.name)?;
-                                        if instance_count == 0 {
-                                            active_block = ActiveBlock::EventBlock;
-                                        } else if let Some(selected) =
-                                            instance_list_state.selected()
-                                        {
-                                            if selected >= instance_count {
-                                                instance_list_state
-                                                    .select(Some(instance_count - 1));
+                                match e.get(topic_list_state.selected().unwrap_or(0)) {
+                                    Some(sel_topic) => {
+                                        item_count =
+                                            read_items_count_from_db(&conn, &sel_topic.name)?;
+                                        if item_count == 0 {
+                                            active_block = ActiveBlock::Event;
+                                        } else if let Some(selected) = item_list_state.selected() {
+                                            if selected >= item_count {
+                                                item_list_state.select(Some(item_count - 1));
                                             }
                                         }
                                     }
@@ -870,7 +908,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         code: KeyCode::Esc, ..
                     },
                     MenuItem::Instances,
-                    ActiveBlock::InstanceBlock,
+                    _,
                     ActivePopUp::Update | ActivePopUp::Delete,
                 ) => {
                     active_popup = ActivePopUp::None;
