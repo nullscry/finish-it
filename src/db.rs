@@ -1,18 +1,43 @@
 use rusqlite::{Connection, Result};
-use std::path;
 
 use super::add::TextAreaContainer;
 use crate::{Item, Topic};
-pub fn get_db_connection() -> Connection {
-    let db_path = path::Path::new("var/fit.db");
+pub fn get_db_connection() -> Result<Connection, rusqlite::Error> {
+    let conn = Connection::open("var/fit.db")?;
 
-    if !path::Path::exists(db_path) {
-        panic!(
-            "Problem opening the file: {db_path:?}\nExecute \"fitdb create\" to initialize database at {db_path:?}"
-        );
-    }
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS topics(
+            name VARCHAR(256) NOT NULL,
+            created TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            PRIMARY KEY(name)
+        )",
+        [],
+    )?;
 
-    Connection::open(db_path).unwrap()
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS items(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name VARCHAR(256) NOT NULL,
+            topicname VARCHAR(256) NOT NULL,
+            isrecurring INTEGER DEFAULT 0 NOT NULL,
+            percentage INTEGER DEFAULT 0 NOT NULL,
+            timesfinished INTEGER DEFAULT 0 NOT NULL,
+            daylimit INTEGER DEFAULT 0 NOT NULL,
+            created TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            FOREIGN KEY(topicname) REFERENCES topics(name)
+                ON DELETE CASCADE
+                ON UPDATE CASCADE
+        )",
+        [],
+    )?;
+
+    // if !path::Path::exists(db_path) {
+    //     panic!(
+    //         "Problem opening the file: {db_path:?}\nExecute \"fitdb create\" to initialize database at {db_path:?}"
+    //     );
+    // }
+
+    Ok(conn)
 }
 
 pub fn read_topics_from_db(conn: &Connection) -> Result<Vec<Topic>, rusqlite::Error> {
@@ -78,11 +103,8 @@ pub fn insert_into_db(
     conn: &Connection,
     text_areas: &mut [TextAreaContainer],
 ) -> Result<(), rusqlite::Error> {
-    let default = String::from("0");
-    let texts: Vec<&str> = text_areas
-        .iter()
-        .map(|ta| ta.text_area.lines().get(0).unwrap_or(&default).trim())
-        .collect();
+    let texts: Vec<String> = text_areas.iter().map(|ta| ta.get_inner_data()).collect();
+    let texts: Vec<&str> = texts.iter().map(std::ops::Deref::deref).collect();
 
     conn.execute(
         "INSERT OR IGNORE INTO topics (name) VALUES (?1)",

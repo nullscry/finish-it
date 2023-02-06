@@ -12,7 +12,7 @@ use tui::{
 
 use super::db::{read_items_from_db, read_topics_from_db};
 use super::{Item, Topic};
-use crate::ActiveBlock;
+use crate::{ActiveBlock, Confirm};
 
 pub fn render_home<'a>() -> Paragraph<'a> {
     let home = Paragraph::new(vec![
@@ -91,15 +91,18 @@ pub fn render_topics<'a>(
 
     let mut rows: Vec<Row<'a>> = Vec::new();
     for item in item_list {
+        // rows.push(Row::new(item.as_cells()));
         rows.push(Row::new(vec![
             Cell::from(Span::raw(item.id.to_string())),
             Cell::from(Span::raw(item.name.to_string())),
             Cell::from(Span::raw(item.get_dot_vec())),
-            Cell::from(Span::raw(item.isrecurring.to_string())),
+            Cell::from(Span::raw(Confirm::get_confirm_str(
+                &item.isrecurring.to_string(),
+            ))),
             Cell::from(Span::raw(item.percentage.to_string())),
             Cell::from(Span::raw(item.timesfinished.to_string())),
-            Cell::from(Span::raw(item.daylimit.to_string())),
-            Cell::from(Span::raw(item.created.to_string())),
+            Cell::from(Span::raw(item.days_left())),
+            Cell::from(Span::raw(item.created.date_naive().to_string())),
         ]));
     }
 
@@ -118,7 +121,7 @@ pub fn render_topics<'a>(
                 Style::default().add_modifier(Modifier::BOLD),
             )),
             Cell::from(Span::styled(
-                "Recur",
+                "Recurring?",
                 Style::default().add_modifier(Modifier::BOLD),
             )),
             Cell::from(Span::styled(
@@ -147,13 +150,13 @@ pub fn render_topics<'a>(
         )
         .widths(&[
             Constraint::Percentage(5),
-            Constraint::Percentage(20),
+            Constraint::Percentage(25),
             Constraint::Percentage(15),
             Constraint::Percentage(10),
             Constraint::Percentage(10),
             Constraint::Percentage(10),
             Constraint::Percentage(10),
-            Constraint::Percentage(20),
+            Constraint::Percentage(15),
         ])
         .highlight_style(
             Style::default()
