@@ -206,10 +206,12 @@ pub fn get_add_err_text() -> Paragraph<'static> {
         Spans::from(vec![Span::raw(
             "Type out your desired new Item as laid out by the boxes.",
         )]),
-        Spans::from(vec![Span::raw("Topic and Item cannot be blank.")]),
+        Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw(
             "The rest all show which values are allowed next to their names.",
         )]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![Span::raw("Blank inputs are not accepted.")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::raw(
             "Press Enter key when you are done with a box to move on to the next one.",

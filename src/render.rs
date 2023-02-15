@@ -17,16 +17,50 @@ use crate::{ActiveBlock, Confirm};
 pub fn render_home<'a>() -> Paragraph<'a> {
     let home = Paragraph::new(vec![
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Welcome")]),
-        Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("to")]),
         Spans::from(vec![Span::raw("")]),
         Spans::from(vec![Span::styled(
-            "Topic-CLI",
-            Style::default().fg(Color::LightBlue),
+            "Finish It!",
+            Style::default()
+                .fg(Color::LightRed)
+                .add_modifier(Modifier::BOLD),
         )]),
         Spans::from(vec![Span::raw("")]),
-        Spans::from(vec![Span::raw("Press 'Alt+e' to access topics, 'Alt+a' to add items and 'Alt+u' to update and 'Alt+d' to delete the currently selected Topic.")]),
+        Spans::from(vec![Span::raw(
+            "A TUI application to track your progress in any one time or recurring task.",
+        )]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![
+            Span::raw("Use the "),
+            Span::styled(
+                "Topics tab (Alt+t or Home)",
+                Style::default()
+                    .fg(Color::LightYellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" to track, modify or delete your Topics and Items"),
+        ]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![
+            Span::raw("Use the "),
+            Span::styled(
+                "Add tab (Alt+a or Insert)",
+                Style::default()
+                    .fg(Color::LightYellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" to add new Topics and/or Items"),
+        ]),
+        Spans::from(vec![Span::raw("")]),
+        Spans::from(vec![
+            Span::raw("Use the "),
+            Span::styled(
+                "Quit tab (Alt+q or End)",
+                Style::default()
+                    .fg(Color::LightYellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" to quit Finish It"),
+        ]),
     ])
     .alignment(Alignment::Center)
     .block(
@@ -164,15 +198,6 @@ pub fn render_topics<'a>(
                 .fg(Color::Black)
                 .add_modifier(Modifier::BOLD),
         );
-
-    // let selected_item = item_list
-    //     .get(
-    //         item_list_state
-    //             .selected()
-    //             .expect("there is always a selected Topic"),
-    //     )
-    //     .expect("exists")
-    //     .clone();
 
     (list, selected_item, selected_event, item_detail)
 }

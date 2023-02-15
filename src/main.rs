@@ -160,7 +160,7 @@ impl Item {
                 }
             }
             1 => {
-                if self.percentage + 1 <= 100 {
+                if self.percentage + 1 < 100 {
                     self.percentage += 1;
                 } else {
                     self.percentage = 1;
@@ -383,8 +383,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .split(size);
 
-            let copyright = Paragraph::new("Highlight an Item and hit Enter to edit its progress. Hit Delete key on selected Item or Topic to delete them.")
-                .style(Style::default().fg(Color::LightCyan))
+            let footer = Paragraph::new("Highlight an Item and hit Enter to edit its progress. Hit Delete key on selected Item or Topic to delete them.")
+                .style(Style::default().fg(Color::LightYellow))
                 .alignment(Alignment::Center)
                 .block(
                     Block::default()
@@ -500,7 +500,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     rect.render_widget(helper_text, cols[1]);
                 }
             }
-            rect.render_widget(copyright, chunks[2]);
+            rect.render_widget(footer, chunks[2]);
         })?;
 
         match rx.recv()? {
@@ -574,13 +574,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     MenuItem::Instances,
                     ActiveBlock::Event,
                     ActivePopUp::None,
-                ) => match read_topics_from_db(&conn) {
-                    Ok(e) => {
+                ) => {
+                    if let Ok(e) = read_topics_from_db(&conn) {
                         if !e.is_empty() {
-                            let selected = match topic_list_state.selected() {
-                                Some(s) => s,
-                                None => 0,
-                            };
+                            let selected = topic_list_state.selected().unwrap_or(0);
                             if selected >= e.len() - 1 {
                                 topic_list_state.select(Some(0));
                             } else {
@@ -588,8 +585,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                     }
-                    Err(_) => {}
-                },
+                }
 
                 (
                     KeyEvent {
@@ -598,13 +594,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     MenuItem::Instances,
                     ActiveBlock::Event,
                     ActivePopUp::None,
-                ) => match read_topics_from_db(&conn) {
-                    Ok(e) => {
+                ) => {
+                    if let Ok(e) = read_topics_from_db(&conn) {
                         if !e.is_empty() {
-                            let selected = match topic_list_state.selected() {
-                                Some(s) => s,
-                                None => 0,
-                            };
+                            let selected = topic_list_state.selected().unwrap_or(0);
                             if selected > 0 {
                                 topic_list_state.select(Some(selected - 1));
                             } else {
@@ -612,8 +605,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
                     }
-                    Err(_) => {}
-                },
+                }
 
                 (
                     KeyEvent {
@@ -623,23 +615,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     MenuItem::Instances,
                     ActiveBlock::Event,
                     ActivePopUp::None,
-                ) => match read_topics_from_db(&conn) {
-                    Ok(e) => {
+                ) => {
+                    if let Ok(e) = read_topics_from_db(&conn) {
                         if !e.is_empty() {
-                            match e.get(topic_list_state.selected().unwrap_or(0)) {
-                                Some(sel_topic) => {
-                                    item_count = read_items_count_from_db(&conn, &sel_topic.name)?;
-                                    if item_count > 0 {
-                                        active_block = ActiveBlock::InstanceBlock;
-                                        item_list_state.select(Some(0));
-                                    }
+                            if let Some(sel_topic) = e.get(topic_list_state.selected().unwrap_or(0))
+                            {
+                                item_count = read_items_count_from_db(&conn, &sel_topic.name)?;
+                                if item_count > 0 {
+                                    active_block = ActiveBlock::InstanceBlock;
+                                    item_list_state.select(Some(0));
                                 }
-                                None => {}
                             }
                         }
                     }
-                    Err(_) => {}
-                },
+                }
 
                 (
                     KeyEvent {
@@ -664,17 +653,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ) => {
                     delete_topic(&conn, &selected_topic)?;
                     active_popup = ActivePopUp::None;
-                    match read_topics_from_db(&conn) {
-                        Ok(e) => {
-                            if e.is_empty() {
-                                topic_list_state.select(None);
-                            } else if let Some(selected) = topic_list_state.selected() {
-                                if selected >= e.len() {
-                                    topic_list_state.select(Some(e.len() - 1));
-                                }
+                    if let Ok(e) = read_topics_from_db(&conn) {
+                        if e.is_empty() {
+                            topic_list_state.select(None);
+                        } else if let Some(selected) = topic_list_state.selected() {
+                            if selected >= e.len() {
+                                topic_list_state.select(Some(e.len() - 1));
                             }
                         }
-                        Err(_) => {}
                     }
                 }
 
@@ -728,10 +714,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ActivePopUp::None,
                 ) => {
                     active_block = ActiveBlock::Event;
-                    let selected = match topic_list_state.selected() {
-                        Some(s) => s,
-                        None => 0,
-                    };
+                    let selected = topic_list_state.selected().unwrap_or(0);
                     topic_list_state.select(Some(selected));
                 }
 
@@ -820,26 +803,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ) => {
                     delete_item(&conn, &selected_item)?;
                     active_popup = ActivePopUp::None;
-                    match read_topics_from_db(&conn) {
-                        Ok(e) => {
-                            if !e.is_empty() {
-                                match e.get(topic_list_state.selected().unwrap_or(0)) {
-                                    Some(sel_topic) => {
-                                        item_count =
-                                            read_items_count_from_db(&conn, &sel_topic.name)?;
-                                        if item_count == 0 {
-                                            active_block = ActiveBlock::Event;
-                                        } else if let Some(selected) = item_list_state.selected() {
-                                            if selected >= item_count {
-                                                item_list_state.select(Some(item_count - 1));
-                                            }
-                                        }
+                    if let Ok(e) = read_topics_from_db(&conn) {
+                        if !e.is_empty() {
+                            if let Some(sel_topic) = e.get(topic_list_state.selected().unwrap_or(0))
+                            {
+                                item_count = read_items_count_from_db(&conn, &sel_topic.name)?;
+                                if item_count == 0 {
+                                    active_block = ActiveBlock::Event;
+                                } else if let Some(selected) = item_list_state.selected() {
+                                    if selected >= item_count {
+                                        item_list_state.select(Some(item_count - 1));
                                     }
-                                    None => {}
                                 }
                             }
                         }
-                        Err(_) => {}
                     }
                 }
 

@@ -31,12 +31,6 @@ pub fn get_db_connection() -> Result<Connection, rusqlite::Error> {
         [],
     )?;
 
-    // if !path::Path::exists(db_path) {
-    //     panic!(
-    //         "Problem opening the file: {db_path:?}\nExecute \"fitdb create\" to initialize database at {db_path:?}"
-    //     );
-    // }
-
     Ok(conn)
 }
 
