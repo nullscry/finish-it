@@ -2,6 +2,10 @@
 name = "finish-it"
 version = "0.1.0"
 edition = "2021"
+description = "A TUI application to track whatever is that you would actually like to finish after starting."
+license = "GPL-3.0"
+keywords = ["tui", "sqlite", "progress-tracker"]
+repository = "https://github.com/nullscry/finish-it"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
