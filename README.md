@@ -10,26 +10,26 @@ The project uses tui-rs and and sqlite database.
 
 ## Home Tab
 
-<img src="./assets/home.jpg" alt="Screenshot of Home Tab">
+<img src="assets/home_tab.jpg" alt="Screenshot of Home Tab">
 
 ## Topics Tab
 
-<img src="./assets/topics.jpg" alt="Screenshot of Topics Tab">
+<img src="assets/topics_tab.jpg" alt="Screenshot of Topics Tab">
 
 ## Add Tab
 
-<img src="./assets/add.jpg" alt="Screenshot of Add Tab">
+<img src="assets/add_tab.jpg" alt="Screenshot of Add Tab">
 
 ## Updating Progress
 
-<img src="./assets/update.jpg" alt="Screenshot of Update Popup in Topics Tab">
+<img src="assets/update_tab.jpg" alt="Screenshot of Update Popup in Topics Tab">
 
 ## Deleting
 
 ### Deleting Item
 
-<img src="./assets/delete_item.jpg" alt="Screenshot of Delete Item Popup in Topics Tab">
+<img src="assets/delete_item.jpg" alt="Screenshot of Delete Item Popup in Topics Tab">
 
 ### Deleting Topic
 
-<img src="./assets/delete_topic.jpg" alt="Screenshot of Delete Topic Popup in Topics Tab">
+<img src="assets/delete_topic.jpg" alt="Screenshot of Delete Topic Popup in Topics Tab">
